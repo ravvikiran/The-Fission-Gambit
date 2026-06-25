@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CivAI - Civilization Strategy Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Login Screen -->
+        <div id="login-screen" class="screen active">
+            <h1>⚔️ CivAI</h1>
+            <p class="subtitle">Build. Expand. Conquer. Survive.</p>
+            <div class="start-options">
+                <label>Enter your name to continue:</label>
+                <input type="text" id="player-name-input" placeholder="Your name..." maxlength="20">
+                <button id="login-btn" class="btn-primary">Enter</button>
+                <p id="login-hint" style="color:var(--text-secondary);font-size:0.8rem;margin-top:0.5rem;">
+                    Returning players are recognized automatically.
+                </p>
+            </div>
+        </div>
+
+        <!-- Welcome Back / Start Screen -->
+        <div id="start-screen" class="screen">
+            <h1>⚔️ CivAI</h1>
+            <p class="subtitle" id="welcome-message">Welcome back!</p>
+            <div id="player-stats-panel" style="margin-bottom:1.5rem;"></div>
+            <div class="start-options">
+                <div id="continue-game-section" style="display:none;">
+                    <button id="continue-btn" class="btn-primary" style="background:var(--accent-secondary);">Continue Saved Game</button>
+                    <hr style="border-color:var(--bg-light);margin:1rem 0;">
+                </div>
+                <label>Your Civilization Name:</label>
+                <input type="text" id="player-civ-name" value="Roma" maxlength="12">
+                <label>Number of AI Opponents:</label>
+                <select id="ai-count">
+                    <option value="2">2 Opponents</option>
+                    <option value="3" selected>3 Opponents</option>
+                </select>
+                <label>Difficulty:</label>
+                <select id="difficulty">
+                    <option value="easy">Easy</option>
+                    <option value="normal" selected>Normal</option>
+                    <option value="hard">Hard</option>
+                </select>
+                <button id="start-btn" class="btn-primary">New Game</button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <header id="game-header">
+                <div class="header-left">
+                    <span id="turn-display">Turn 1</span>
+                    <span id="era-display">Ancient Era</span>
+                </div>
+                <div class="header-right">
+                    <button id="end-turn-btn" class="btn-primary">End Turn</button>
+                </div>
+            </header>
+
+            <div id="game-layout">
+                <!-- Resource Bar -->
+                <div id="resource-bar">
+                    <div class="resource" title="Gold"><span>💰</span><span id="res-gold">100</span><span id="res-gold-rate" class="rate"></span></div>
+                    <div class="resource" title="Food"><span>🌾</span><span id="res-food">50</span><span id="res-food-rate" class="rate"></span></div>
+                    <div class="resource" title="Production"><span>🔨</span><span id="res-production">30</span><span id="res-production-rate" class="rate"></span></div>
+                    <div class="resource" title="Science"><span>🔬</span><span id="res-science">10</span><span id="res-science-rate" class="rate"></span></div>
+                    <div class="resource" title="Military Power"><span>⚔️</span><span id="res-military">5</span></div>
+                    <div class="resource" title="Population"><span>👥</span><span id="res-population">10</span></div>
+                </div>
+
+                <!-- Main Content Area -->
+                <div id="main-content">
+                    <!-- Tab Navigation -->
+                    <div id="tab-nav">
+                        <button class="tab active" data-tab="overview">Overview</button>
+                        <button class="tab" data-tab="build">Build</button>
+                        <button class="tab" data-tab="research">Research</button>
+                        <button class="tab" data-tab="military">Military</button>
+                        <button class="tab" data-tab="diplomacy">Diplomacy</button>
+                    </div>
+
+                    <!-- Tab Content -->
+                    <div id="tab-content">
+                        <div id="tab-overview" class="tab-panel active"></div>
+                        <div id="tab-build" class="tab-panel"></div>
+                        <div id="tab-research" class="tab-panel"></div>
+                        <div id="tab-military" class="tab-panel"></div>
+                        <div id="tab-diplomacy" class="tab-panel"></div>
+                    </div>
+                </div>
+
+                <!-- Event Log -->
+                <div id="event-log">
+                    <h3>📜 Events</h3>
+                    <div id="log-entries"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-screen" class="screen">
+            <h1 id="gameover-title"></h1>
+            <p id="gameover-message"></p>
+            <div id="gameover-stats"></div>
+            <button id="restart-btn" class="btn-primary">Play Again</button>
+        </div>
+    </div>
+
+    <script src="game-engine.js"></script>
+    <script src="ai-engine.js"></script>
+    <script src="save-system.js"></script>
+    <script src="ui.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
