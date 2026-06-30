@@ -75,7 +75,7 @@ const GOVERNMENTS = {
 // RANDOM EVENTS - Triggered each turn with small probability
 // ============================================
 const RANDOM_EVENTS = [
-    { id: 'goldenAge', name: 'Golden Age', desc: 'A period of prosperity!', prob: 0.04, effect: (civ) => { civ.goldRate += 5; civ.foodRate += 2; civ.goldenAgeTurns = 5; } },
+    { id: 'goldenAge', name: 'Golden Age', desc: 'A period of prosperity!', prob: 0.04, effect: (civ) => { if (civ.goldenAgeTurns <= 0) { civ.goldRate += 5; civ.foodRate += 2; } civ.goldenAgeTurns = 5; } },
     { id: 'plague', name: 'Plague', desc: 'Disease sweeps the land!', prob: 0.03, effect: (civ) => { civ.population = Math.max(3, civ.population - Math.floor(civ.population * 0.2)); } },
     { id: 'barbarianRaid', name: 'Barbarian Raid', desc: 'Raiders attack the borders!', prob: 0.05, effect: (civ) => { civ.gold = Math.max(0, civ.gold - 30); civ.military = Math.max(0, civ.military - 2); } },
     { id: 'tradeWindfall', name: 'Trade Windfall', desc: 'Merchants bring riches!', prob: 0.04, effect: (civ) => { civ.gold += 80; } },
@@ -210,12 +210,14 @@ class GameEngine {
 
         // Create player
         this.player = new Civilization(playerName, true);
+        this.applyGovernmentEffects(this.player, 'despotism');
         this.civilizations.push(this.player);
 
         // Create AI civs
         const shuffled = [...AI_CIV_NAMES].sort(() => Math.random() - 0.5);
         for (let i = 0; i < aiCount; i++) {
             const ai = new Civilization(shuffled[i], false);
+            this.applyGovernmentEffects(ai, 'despotism');
             // Difficulty bonuses for AI
             if (difficulty === 'hard') {
                 ai.goldRate += 3;
@@ -238,6 +240,15 @@ class GameEngine {
         }
 
         this.addEvent('game', `The world awakens. ${this.civilizations.length} civilizations compete for supremacy.`);
+    }
+
+    applyGovernmentEffects(civ, govId) {
+        const gov = GOVERNMENTS[govId];
+        if (!gov) return;
+        Object.entries(gov.effects).forEach(([key, val]) => {
+            if (key === 'militaryBonus') civ.military += val;
+            else if (civ[key] !== undefined) civ[key] += val;
+        });
     }
 
     addEvent(type, message) {
@@ -378,9 +389,11 @@ class GameEngine {
         // All other civs become hostile to the nuke user
         for (const civ of this.civilizations) {
             if (civ !== attacker && civ.alive) {
-                civ.relations[attacker.name].value = Math.max(0, civ.relations[attacker.name].value - 40);
-                if (civ.relations[attacker.name].value < 20) {
-                    civ.relations[attacker.name].status = 'hostile';
+                if (civ.relations[attacker.name]) {
+                    civ.relations[attacker.name].value = Math.max(0, civ.relations[attacker.name].value - 40);
+                    if (civ.relations[attacker.name].value < 20) {
+                        civ.relations[attacker.name].status = 'hostile';
+                    }
                 }
             }
         }

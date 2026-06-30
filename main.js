@@ -157,7 +157,11 @@ class GameApp {
         if (victory) {
             await this.handleGameOver(this.engine.winner, this.engine.victoryType);
         } else if (!this.engine.player.alive) {
-            const winner = this.engine.getAliveCivs()[0] || this.engine.civilizations[1];
+            // Find the strongest surviving civ as the eventual winner
+            const aliveCivs = this.engine.getAliveCivs();
+            const winner = aliveCivs.length > 0
+                ? aliveCivs.sort((a, b) => b.getScore() - a.getScore())[0]
+                : this.engine.civilizations.find(c => !c.isPlayer);
             await this.handleGameOver(winner, 'domination');
         } else {
             this.ui.render();
@@ -205,8 +209,14 @@ class GameApp {
     trainUnit(unitId) {
         const p = this.engine.player;
         const unit = MILITARY_UNITS[unitId];
-        if (!p.canAfford(unit.cost)) return;
-        p.spend(unit.cost);
+        // Apply Manhattan Project discount for nukes
+        let cost = { ...unit.cost };
+        if (unit.isNuke && p.wonders.includes('manhattan')) {
+            cost.gold = Math.floor(cost.gold / 2);
+            cost.production = Math.floor(cost.production / 2);
+        }
+        if (!p.canAfford(cost)) return;
+        p.spend(cost);
         p.units.push(unitId);
         this.engine.addEvent('war', `${p.name} trained ${unit.name}.`);
         this.ui.render();

@@ -23,10 +23,16 @@ class AIEngine {
         // Step 3: Choose building
         this.chooseBuilding(civ);
 
-        // Step 4: Choose military actions
+        // Step 4: Try to build wonders
+        this.chooseWonder(civ);
+
+        // Step 5: Consider government change
+        this.chooseGovernment(civ);
+
+        // Step 6: Choose military actions
         this.chooseMilitaryAction(civ);
 
-        // Step 5: Diplomatic decisions
+        // Step 7: Diplomatic decisions
         this.chooseDiplomacy(civ);
     }
 
@@ -195,7 +201,12 @@ class AIEngine {
             const affordableUnits = Object.entries(MILITARY_UNITS).filter(([id, unit]) => {
                 if (unit.era > era) return false;
                 if (unit.isNuke && !civ.hasNukes) return false;
-                return civ.canAfford(unit.cost);
+                // Apply Manhattan Project discount for cost check
+                let cost = unit.cost;
+                if (unit.isNuke && civ.wonders.includes('manhattan')) {
+                    cost = { gold: Math.floor(unit.cost.gold / 2), production: Math.floor(unit.cost.production / 2) };
+                }
+                return civ.canAfford(cost);
             });
 
             if (affordableUnits.length > 0) {
@@ -205,7 +216,11 @@ class AIEngine {
 
                 // Only buy if strategy demands it or randomly
                 if (civ.strategy === 'aggressive' || Math.random() < 0.4) {
-                    civ.spend(unit.cost);
+                    let cost = unit.cost;
+                    if (unit.isNuke && civ.wonders.includes('manhattan')) {
+                        cost = { gold: Math.floor(unit.cost.gold / 2), production: Math.floor(unit.cost.production / 2) };
+                    }
+                    civ.spend(cost);
                     civ.units.push(unitId);
                     this.game.addEvent('war', `${civ.name} trained ${unit.name}.`);
                 }
@@ -286,6 +301,91 @@ class AIEngine {
                 relation.value = Math.max(0, relation.value - 10);
                 if (relation.value < 20) relation.status = 'hostile';
             }
+        }
+    }
+
+    chooseWonder(civ) {
+        // Only try to build wonders if not currently building something and has resources
+        if (civ.currentBuild) return;
+
+        const availableWonders = Object.entries(WONDERS).filter(([id, wonder]) => {
+            // Check no civ has built it
+            for (const c of this.game.civilizations) {
+                if (c.wonders.includes(id)) return false;
+            }
+            if (wonder.era > civ.getEra() + 1) return false;
+            if (wonder.requires && !wonder.requires.every(r => civ.techs.includes(r))) return false;
+            if (!civ.canAfford(wonder.cost)) return false;
+            return true;
+        });
+
+        if (availableWonders.length === 0) return;
+
+        // Score wonders based on strategy
+        const scored = availableWonders.map(([id, wonder]) => {
+            let score = 10;
+            if (wonder.effect.scienceRate && civ.strategy === 'scientific') score += 40;
+            if (wonder.effect.goldRate && civ.strategy === 'economic') score += 40;
+            if (wonder.effect.defenseBonus && civ.strategy === 'aggressive') score += 30;
+            if (wonder.effect.militaryBonus && civ.strategy === 'aggressive') score += 35;
+            if (wonder.effect.nukeCostReduction && civ.hasNukes) score += 50;
+            return { id, score };
+        });
+
+        scored.sort((a, b) => b.score - a.score);
+
+        // 40% chance to build a wonder if one is available and scored well
+        if (scored[0].score > 20 && Math.random() < 0.4) {
+            this.game.buildWonder(civ, scored[0].id);
+        }
+    }
+
+    chooseGovernment(civ) {
+        // Only reconsider government every 10+ turns and if strategy warrants it
+        if (this.game.turn < 10) return;
+        if (Math.random() > 0.05) return; // Low chance per turn to consider switching
+
+        const availableGovs = Object.entries(GOVERNMENTS).filter(([id, gov]) => {
+            if (id === civ.government) return false;
+            if (gov.era > civ.getEra()) return false;
+            if (gov.requires && !gov.requires.every(r => civ.techs.includes(r))) return false;
+            return true;
+        });
+
+        if (availableGovs.length === 0) return;
+
+        // Score governments based on strategy
+        const scored = availableGovs.map(([id, gov]) => {
+            let score = 0;
+            const effects = gov.effects;
+            switch (civ.strategy) {
+                case 'aggressive':
+                    score += (effects.militaryBonus || 0) * 5;
+                    score += (effects.productionRate || 0) * 3;
+                    break;
+                case 'economic':
+                    score += (effects.goldRate || 0) * 5;
+                    score += (effects.scienceRate || 0) * 2;
+                    break;
+                case 'scientific':
+                    score += (effects.scienceRate || 0) * 5;
+                    score += (effects.goldRate || 0) * 2;
+                    break;
+                case 'balanced':
+                    score += (effects.goldRate || 0) * 2;
+                    score += (effects.productionRate || 0) * 2;
+                    score += (effects.scienceRate || 0) * 2;
+                    score += (effects.militaryBonus || 0) * 2;
+                    break;
+            }
+            return { id, score };
+        });
+
+        scored.sort((a, b) => b.score - a.score);
+
+        // Only switch if the best option is clearly better
+        if (scored[0].score > 5) {
+            this.game.changeGovernment(civ, scored[0].id);
         }
     }
 

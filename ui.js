@@ -52,8 +52,9 @@ class GameUI {
         document.getElementById('res-population').textContent = p.population;
 
         const goldRate = document.getElementById('res-gold-rate');
-        goldRate.textContent = `+${p.goldRate}/t`;
-        goldRate.className = 'rate';
+        const effectiveGoldRate = p.goldRate - (p.warWeariness > 0 ? Math.floor(p.warWeariness * 2) : 0);
+        goldRate.textContent = `${effectiveGoldRate >= 0 ? '+' : ''}${effectiveGoldRate}/t`;
+        goldRate.className = effectiveGoldRate >= 0 ? 'rate' : 'rate negative';
 
         const foodRate = document.getElementById('res-food-rate');
         const netFood = p.foodRate - p.population;
@@ -295,14 +296,19 @@ class GameUI {
             if (unit.isNuke && !p.hasNukes) return false;
             return true;
         }).map(([id, unit]) => {
-            const canAfford = p.canAfford(unit.cost);
+            // Apply Manhattan Project discount
+            let cost = unit.cost;
+            if (unit.isNuke && p.wonders.includes('manhattan')) {
+                cost = { gold: Math.floor(unit.cost.gold / 2), production: Math.floor(unit.cost.production / 2) };
+            }
+            const canAfford = p.canAfford(cost);
             return `<div class="action-item ${canAfford ? '' : 'disabled'}">
                 <div class="info">
                     <h5>${unit.name} ${unit.isNuke ? '☢️' : ''}</h5>
                     <p>Power: +${unit.power}</p>
                 </div>
                 <div>
-                    <span class="cost">💰${unit.cost.gold} 🔨${unit.cost.production}</span>
+                    <span class="cost">💰${cost.gold} 🔨${cost.production}${unit.isNuke && p.wonders.includes('manhattan') ? ' (50% off)' : ''}</span>
                     ${canAfford ? `<button class="btn-secondary" onclick="window.gameApp.trainUnit('${id}')">Train</button>` : ''}
                 </div>
             </div>`;

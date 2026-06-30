@@ -32,6 +32,14 @@ function serveStatic(req, res) {
     const ext = path.extname(filePath);
     const mime = MIME_TYPES[ext] || 'application/octet-stream';
 
+    // Prevent path traversal — ensure resolved path is within __dirname
+    const resolved = path.resolve(filePath);
+    if (!resolved.startsWith(path.resolve(__dirname))) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
+
     if (!fs.existsSync(filePath)) {
         res.writeHead(404);
         res.end('Not Found');
@@ -43,10 +51,18 @@ function serveStatic(req, res) {
 }
 
 function readBody(req) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         let body = '';
-        req.on('data', chunk => body += chunk);
+        const MAX_SIZE = 1024 * 1024; // 1MB limit
+        req.on('data', chunk => {
+            body += chunk;
+            if (body.length > MAX_SIZE) {
+                req.destroy();
+                reject(new Error('Request body too large'));
+            }
+        });
         req.on('end', () => resolve(body));
+        req.on('error', (err) => reject(err));
     });
 }
 
