@@ -24,8 +24,7 @@ No other dependencies required. The server uses only Node.js built-in modules.
 
 ```bash
 # Clone the repo
-git clone <your-repo-url>
-cd civ-ai-game
+git clone <repo-url>
 
 # Start the server
 node server.js

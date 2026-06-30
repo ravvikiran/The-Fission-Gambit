@@ -1,1 +1,25 @@
+# Dependencies
 node_modules/
+
+# Save data (player-specific, don't push personal saves)
+data/saves/*.json
+!data/saves/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
