@@ -53,11 +53,11 @@ The game pits a human player against 1-3 AI opponents. Each civilization manages
 ## Game Mechanics
 
 ### Resources
-- **Gold** — currency for units and trade
+- **Gold** — currency for units, trade, and espionage
 - **Food** — feeds population; surplus grows population
-- **Production** — used to construct buildings
+- **Production** — used to construct buildings and wonders
 - **Science** — accumulated to complete research
-- **Military** — base power + unit power
+- **Military** — base power + unit power + government/tech bonuses
 - **Population** — grows from food; consumed each turn
 
 ### Technology Tree (7 eras: Ancient → Atomic)
@@ -69,6 +69,23 @@ Key path to science victory: ... → Rocketry → Computers → Space Travel
 2. **Science** — research Space Travel technology
 3. **Economic** — accumulate 5000 Gold
 4. **Diplomatic** — achieve Allied status with all surviving civs
+
+### Wonders (unique, one per world)
+Great Library, Colosseum, Great Wall, Oxford University, Big Ben, Manhattan Project
+
+### Governments
+Despotism (default), Republic, Monarchy, Theocracy, Democracy, Communism — each with unique bonuses/penalties
+
+### Espionage
+- Steal Tech (40% success, 75 gold, 5-turn cooldown)
+- Sabotage (50% success, 75 gold, 5-turn cooldown)
+- Risk of detection damages relations
+
+### Random Events
+Golden Age, Plague, Barbarian Raid, Trade Windfall, Scientific Breakthrough, Bountiful Harvest, Earthquake, Refugees Arrive
+
+### War Weariness
+Each turn at war increases weariness, costing weariness × 2 gold per turn. Decreases by 1 when at peace.
 
 ### AI Strategy System
 The AI evaluates game state every 3-5 turns and picks from:

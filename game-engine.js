@@ -47,6 +47,44 @@ const MILITARY_UNITS = {
     nuke: { name: 'Nuclear Missile', cost: { gold: 200, production: 100 }, power: 50, era: 6, isNuke: true },
 };
 
+// ============================================
+// WONDERS - Unique mega-buildings (only one civ can build each)
+// ============================================
+const WONDERS = {
+    greatLibrary: { name: 'Great Library', cost: { production: 80 }, era: 1, effect: { scienceRate: 8 }, desc: '+8 Science/turn', requires: ['writing'] },
+    colosseum: { name: 'Colosseum', cost: { production: 70 }, era: 1, effect: { goldRate: 5, militaryBonus: 3 }, desc: '+5 Gold/turn, +3 Military', requires: ['currency'] },
+    greatWall: { name: 'Great Wall', cost: { production: 90 }, era: 2, effect: { defenseBonus: 15 }, desc: '+15 Defense in combat', requires: ['engineering'] },
+    oxfordUniversity: { name: 'Oxford University', cost: { production: 110 }, era: 3, effect: { scienceRate: 12 }, desc: '+12 Science/turn', requires: ['education'] },
+    bigBen: { name: 'Big Ben', cost: { production: 120 }, era: 4, effect: { goldRate: 20 }, desc: '+20 Gold/turn', requires: ['economics'] },
+    manhattan: { name: 'Manhattan Project', cost: { production: 150 }, era: 6, effect: { nukeCostReduction: true }, desc: 'Nukes cost 50% less', requires: ['nuclearFission'] },
+};
+
+// ============================================
+// GOVERNMENTS - Choose a government type for bonuses
+// ============================================
+const GOVERNMENTS = {
+    despotism: { name: 'Despotism', era: 0, effects: { militaryBonus: 2, goldRate: -1 }, desc: '+2 Military, -1 Gold/turn (Default)' },
+    republic: { name: 'Republic', era: 1, effects: { goldRate: 3, scienceRate: 2 }, desc: '+3 Gold/turn, +2 Science/turn', requires: ['writing'] },
+    monarchy: { name: 'Monarchy', era: 2, effects: { productionRate: 3, militaryBonus: 3 }, desc: '+3 Production/turn, +3 Military', requires: ['philosophy'] },
+    democracy: { name: 'Democracy', era: 4, effects: { goldRate: 5, scienceRate: 5, militaryBonus: -3 }, desc: '+5 Gold, +5 Science, -3 Military', requires: ['economics'] },
+    communism: { name: 'Communism', era: 4, effects: { productionRate: 8, foodRate: 3, goldRate: -3 }, desc: '+8 Production, +3 Food, -3 Gold', requires: ['industrialization'] },
+    theocracy: { name: 'Theocracy', era: 2, effects: { militaryBonus: 5, goldRate: 2, scienceRate: -2 }, desc: '+5 Military, +2 Gold, -2 Science', requires: ['philosophy'] },
+};
+
+// ============================================
+// RANDOM EVENTS - Triggered each turn with small probability
+// ============================================
+const RANDOM_EVENTS = [
+    { id: 'goldenAge', name: 'Golden Age', desc: 'A period of prosperity!', prob: 0.04, effect: (civ) => { civ.goldRate += 5; civ.foodRate += 2; civ.goldenAgeTurns = 5; } },
+    { id: 'plague', name: 'Plague', desc: 'Disease sweeps the land!', prob: 0.03, effect: (civ) => { civ.population = Math.max(3, civ.population - Math.floor(civ.population * 0.2)); } },
+    { id: 'barbarianRaid', name: 'Barbarian Raid', desc: 'Raiders attack the borders!', prob: 0.05, effect: (civ) => { civ.gold = Math.max(0, civ.gold - 30); civ.military = Math.max(0, civ.military - 2); } },
+    { id: 'tradeWindfall', name: 'Trade Windfall', desc: 'Merchants bring riches!', prob: 0.04, effect: (civ) => { civ.gold += 80; } },
+    { id: 'scientificBreakthrough', name: 'Scientific Breakthrough', desc: 'Eureka! Research accelerated!', prob: 0.03, effect: (civ) => { civ.researchProgress += 20; } },
+    { id: 'harvest', name: 'Bountiful Harvest', desc: 'The farms overflow with food!', prob: 0.05, effect: (civ) => { civ.food += 50; } },
+    { id: 'earthquake', name: 'Earthquake', desc: 'An earthquake damages infrastructure!', prob: 0.02, effect: (civ) => { civ.production = Math.max(0, civ.production - 20); } },
+    { id: 'refugees', name: 'Refugees Arrive', desc: 'Displaced people seek shelter.', prob: 0.03, effect: (civ) => { civ.population += 2; civ.food -= 10; } },
+];
+
 const AI_CIV_NAMES = ['Persia', 'Egypt', 'China', 'Greece', 'Aztec', 'Japan', 'India', 'Viking'];
 
 const VICTORY_CONDITIONS = {
@@ -89,6 +127,24 @@ class Civilization {
         this.relations = {}; // civName -> { status, value }
         this.hasNukes = false;
         this.nukesUsed = 0;
+
+        // Government
+        this.government = 'despotism';
+
+        // Wonders
+        this.wonders = [];
+
+        // War weariness
+        this.warWeariness = 0; // increases each turn at war, costs gold
+
+        // Golden Age tracking
+        this.goldenAgeTurns = 0;
+
+        // Espionage cooldown
+        this.espionageCooldown = 0;
+
+        // Defense bonus from wonders/buildings
+        this.defenseBonus = 0;
 
         // AI state
         this.strategy = 'balanced'; // balanced, aggressive, economic, scientific
@@ -198,6 +254,33 @@ class GameEngine {
         civ.production += civ.productionRate;
         civ.science += civ.scienceRate;
 
+        // War weariness — costs gold for each turn at war
+        const atWar = Object.values(civ.relations).filter(r => r.status === 'war').length;
+        if (atWar > 0) {
+            civ.warWeariness += atWar;
+            const wearinessCost = Math.floor(civ.warWeariness * 2);
+            civ.gold -= wearinessCost;
+            if (civ.gold < 0) civ.gold = 0;
+        } else {
+            civ.warWeariness = Math.max(0, civ.warWeariness - 1);
+        }
+
+        // Golden Age countdown
+        if (civ.goldenAgeTurns > 0) {
+            civ.goldenAgeTurns--;
+            if (civ.goldenAgeTurns === 0) {
+                civ.goldRate -= 5;
+                civ.foodRate -= 2;
+                if (civ.isPlayer) this.addEvent('game', `${civ.name}: The Golden Age has ended.`);
+            }
+        }
+
+        // Espionage cooldown
+        if (civ.espionageCooldown > 0) civ.espionageCooldown--;
+
+        // Random events (small chance each turn)
+        this.rollRandomEvent(civ);
+
         // Population growth from food
         if (civ.food >= 20 * civ.population) {
             civ.population += 1;
@@ -249,7 +332,7 @@ class GameEngine {
         if (!attacker.alive || !defender.alive) return null;
 
         const attackPower = attacker.getTotalMilitary();
-        const defendPower = defender.getTotalMilitary();
+        const defendPower = defender.getTotalMilitary() + (defender.defenseBonus || 0);
         const attackRoll = attackPower * (0.7 + Math.random() * 0.6);
         const defendRoll = defendPower * (0.7 + Math.random() * 0.6);
 
@@ -413,5 +496,122 @@ class GameEngine {
 
     getAIcivs() {
         return this.civilizations.filter(c => !c.isPlayer && c.alive);
+    }
+
+    // --- NEW MECHANICS ---
+
+    rollRandomEvent(civ) {
+        for (const event of RANDOM_EVENTS) {
+            if (Math.random() < event.prob) {
+                event.effect(civ);
+                this.addEvent('game', `${civ.isPlayer ? '🎲 ' : ''}${civ.name}: ${event.name} — ${event.desc}`);
+                break; // Only one event per turn per civ
+            }
+        }
+    }
+
+    changeGovernment(civ, govId) {
+        const gov = GOVERNMENTS[govId];
+        if (!gov) return false;
+        if (gov.requires && !gov.requires.every(r => civ.techs.includes(r))) return false;
+        if (gov.era > civ.getEra()) return false;
+
+        // Remove old government effects
+        const oldGov = GOVERNMENTS[civ.government];
+        if (oldGov) {
+            Object.entries(oldGov.effects).forEach(([key, val]) => {
+                if (key === 'militaryBonus') civ.military -= val;
+                else if (civ[key] !== undefined) civ[key] -= val;
+            });
+        }
+
+        // Apply new government effects
+        civ.government = govId;
+        Object.entries(gov.effects).forEach(([key, val]) => {
+            if (key === 'militaryBonus') civ.military += val;
+            else if (civ[key] !== undefined) civ[key] += val;
+        });
+
+        this.addEvent('game', `${civ.name} adopted ${gov.name} as their government!`);
+        return true;
+    }
+
+    buildWonder(civ, wonderId) {
+        const wonder = WONDERS[wonderId];
+        if (!wonder) return false;
+        if (!civ.canAfford(wonder.cost)) return false;
+        if (wonder.requires && !wonder.requires.every(r => civ.techs.includes(r))) return false;
+
+        // Check if any civ already built this wonder
+        for (const c of this.civilizations) {
+            if (c.wonders.includes(wonderId)) return false;
+        }
+
+        civ.spend(wonder.cost);
+        civ.wonders.push(wonderId);
+
+        // Apply wonder effects
+        Object.entries(wonder.effect).forEach(([key, val]) => {
+            if (key === 'defenseBonus') civ.defenseBonus += val;
+            else if (key === 'militaryBonus') civ.military += val;
+            else if (key === 'nukeCostReduction') { /* handled in unit purchase */ }
+            else if (civ[key] !== undefined) civ[key] += val;
+        });
+
+        this.addEvent('build', `🏛️ ${civ.name} completed the wonder: ${wonder.name}!`);
+        return true;
+    }
+
+    conductEspionage(spy, target, action) {
+        if (spy.espionageCooldown > 0) return { success: false, reason: 'Espionage on cooldown' };
+        if (spy.gold < 75) return { success: false, reason: 'Need 75 gold for espionage' };
+
+        spy.gold -= 75;
+        spy.espionageCooldown = 5; // 5 turn cooldown
+
+        const successChance = action === 'stealTech' ? 0.4 : 0.5;
+        const success = Math.random() < successChance;
+
+        if (action === 'stealTech') {
+            if (success) {
+                // Find a tech target has that spy doesn't
+                const stealable = target.techs.filter(t => !spy.techs.includes(t));
+                if (stealable.length > 0) {
+                    const stolen = stealable[Math.floor(Math.random() * stealable.length)];
+                    spy.techs.push(stolen);
+                    const tech = TECHS[stolen];
+                    if (tech?.militaryBonus) spy.military += tech.militaryBonus;
+                    if (tech?.scienceBonus) spy.scienceRate += tech.scienceBonus;
+                    if (tech?.enablesNukes) spy.hasNukes = true;
+                    this.addEvent('science', `🕵️ ${spy.name} stole ${TECHS[stolen]?.name} from ${target.name}!`);
+                    // Getting caught damages relations
+                    if (Math.random() < 0.5 && target.relations[spy.name]) {
+                        target.relations[spy.name].value = Math.max(0, target.relations[spy.name].value - 20);
+                        if (target.relations[spy.name].value < 30) target.relations[spy.name].status = 'hostile';
+                    }
+                    return { success: true, stolen: TECHS[stolen]?.name };
+                }
+            }
+            this.addEvent('game', `🕵️ ${spy.name}'s spy mission against ${target.name} failed.`);
+            return { success: false, reason: 'Mission failed' };
+        }
+
+        if (action === 'sabotage') {
+            if (success) {
+                const damage = 10 + Math.floor(Math.random() * 20);
+                target.production = Math.max(0, target.production - damage);
+                target.buildProgress = Math.max(0, target.buildProgress - 5);
+                this.addEvent('war', `🕵️ ${spy.name} sabotaged ${target.name}'s infrastructure! (-${damage} production)`);
+                if (Math.random() < 0.4 && target.relations[spy.name]) {
+                    target.relations[spy.name].value = Math.max(0, target.relations[spy.name].value - 25);
+                    if (target.relations[spy.name].value < 20) target.relations[spy.name].status = 'hostile';
+                }
+                return { success: true, damage };
+            }
+            this.addEvent('game', `🕵️ ${spy.name}'s sabotage attempt against ${target.name} was foiled.`);
+            return { success: false, reason: 'Mission failed' };
+        }
+
+        return { success: false, reason: 'Unknown action' };
     }
 }

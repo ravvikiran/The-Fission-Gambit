@@ -107,8 +107,10 @@ class GameUI {
                     <h4>🏛️ Your Civilization</h4>
                     <div class="value">${p.name}</div>
                     <p style="color:var(--text-secondary);font-size:0.85rem;margin-top:0.3rem;">
-                        Score: ${p.getScore()} | Era: ${p.getEraName()}
+                        Score: ${p.getScore()} | Era: ${p.getEraName()} | Gov: ${GOVERNMENTS[p.government]?.name || 'Despotism'}
                     </p>
+                    ${p.warWeariness > 0 ? `<p style="color:var(--danger);font-size:0.8rem;">⚠️ War Weariness: -${Math.floor(p.warWeariness * 2)} Gold/turn</p>` : ''}
+                    ${p.goldenAgeTurns > 0 ? `<p style="color:var(--gold);font-size:0.8rem;">✨ Golden Age: ${p.goldenAgeTurns} turns left</p>` : ''}
                 </div>
                 <div class="overview-card">
                     <h4>🌍 World Status</h4>
@@ -130,6 +132,7 @@ class GameUI {
                     <div style="font-size:0.85rem;color:var(--text-secondary);">
                         ${p.buildings.map(b => BUILDINGS[b]?.name || b).join(', ') || 'None yet'}
                     </div>
+                    ${p.wonders.length > 0 ? `<div style="font-size:0.85rem;color:var(--gold);margin-top:0.3rem;">🏛️ Wonders: ${p.wonders.map(w => WONDERS[w]?.name || w).join(', ')}</div>` : ''}
                 </div>
                 <div class="overview-card">
                     <h4>📚 Technologies (${p.techs.length})</h4>
@@ -187,7 +190,59 @@ class GameUI {
             </div>`;
         }).join('');
 
-        panel.innerHTML = `${currentHTML}<div class="action-list">${itemsHTML || '<p style="color:var(--text-secondary)">No buildings available. Research more technologies!</p>'}</div>`;
+        // Available Wonders
+        const availableWonders = Object.entries(WONDERS).filter(([id, wonder]) => {
+            // Check no civ has built it
+            for (const c of this.game.civilizations) {
+                if (c.wonders.includes(id)) return false;
+            }
+            if (wonder.era > p.getEra() + 1) return false;
+            if (wonder.requires && !wonder.requires.every(r => p.techs.includes(r))) return false;
+            return true;
+        });
+
+        const wondersHTML = availableWonders.map(([id, wonder]) => {
+            const canAfford = p.canAfford(wonder.cost);
+            return `<div class="action-item ${canAfford ? '' : 'disabled'}">
+                <div class="info">
+                    <h5>🏛️ ${wonder.name} <span style="color:var(--gold);font-size:0.75rem;">(WONDER)</span></h5>
+                    <p>${wonder.desc}</p>
+                </div>
+                <div>
+                    <span class="cost">🔨 ${wonder.cost.production}</span>
+                    ${canAfford ? `<button class="btn-secondary" onclick="window.gameApp.buildWonder('${id}')">Build</button>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+
+        // Government options
+        const availableGovs = Object.entries(GOVERNMENTS).filter(([id, gov]) => {
+            if (id === p.government) return false;
+            if (gov.era > p.getEra()) return false;
+            if (gov.requires && !gov.requires.every(r => p.techs.includes(r))) return false;
+            return true;
+        });
+
+        const govHTML = availableGovs.length > 0 ? `
+            <h4 style="margin-top:1rem;margin-bottom:0.5rem;">🏛️ Change Government</h4>
+            <div class="action-list">${availableGovs.map(([id, gov]) => `
+                <div class="action-item">
+                    <div class="info">
+                        <h5>${gov.name}</h5>
+                        <p>${gov.desc}</p>
+                    </div>
+                    <div>
+                        <button class="btn-secondary" onclick="window.gameApp.changeGovernment('${id}')">Adopt</button>
+                    </div>
+                </div>
+            `).join('')}</div>
+        ` : '';
+
+        panel.innerHTML = `${currentHTML}
+            <div class="action-list">${itemsHTML || '<p style="color:var(--text-secondary)">No buildings available. Research more technologies!</p>'}</div>
+            ${wondersHTML ? `<h4 style="margin-top:1rem;margin-bottom:0.5rem;">🏛️ World Wonders</h4><div class="action-list">${wondersHTML}</div>` : ''}
+            ${govHTML}
+        `;
     }
 
     renderResearch() {
@@ -300,6 +355,11 @@ class GameUI {
                 if (p.hasNukes) {
                     actions.push(`<button class="btn-danger" onclick="window.gameApp.nukeCity('${civ.name}')">☢️ Launch Nuke</button>`);
                 }
+            }
+            // Espionage (available after Classical era, not during alliance)
+            if (relation.status !== 'allied' && p.getEra() >= 1 && p.espionageCooldown === 0 && p.gold >= 75) {
+                actions.push(`<button class="btn-secondary" onclick="window.gameApp.conductEspionage('${civ.name}','stealTech')">🕵️ Steal Tech (75💰)</button>`);
+                actions.push(`<button class="btn-secondary" onclick="window.gameApp.conductEspionage('${civ.name}','sabotage')">🕵️ Sabotage (75💰)</button>`);
             }
 
             return `<div class="civ-card">

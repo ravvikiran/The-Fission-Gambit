@@ -119,6 +119,12 @@ class SaveSystem {
                 nukesUsed: civ.nukesUsed,
                 strategy: civ.strategy,
                 strategyLock: civ.strategyLock,
+                government: civ.government,
+                wonders: civ.wonders,
+                warWeariness: civ.warWeariness,
+                goldenAgeTurns: civ.goldenAgeTurns,
+                espionageCooldown: civ.espionageCooldown,
+                defenseBonus: civ.defenseBonus,
             })),
             events: gameEngine.events.slice(0, 20),
         };

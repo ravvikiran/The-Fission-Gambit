@@ -256,6 +256,33 @@ class GameApp {
         this.ui.render();
     }
 
+    changeGovernment(govId) {
+        const success = this.engine.changeGovernment(this.engine.player, govId);
+        if (!success) {
+            this.engine.addEvent('game', `Cannot adopt this government yet.`);
+        }
+        this.ui.render();
+    }
+
+    buildWonder(wonderId) {
+        const success = this.engine.buildWonder(this.engine.player, wonderId);
+        if (!success) {
+            this.engine.addEvent('game', `Cannot build this wonder.`);
+        }
+        this.ui.render();
+    }
+
+    conductEspionage(civName, action) {
+        const p = this.engine.player;
+        const target = this.engine.civilizations.find(c => c.name === civName);
+        if (!target) return;
+        const result = this.engine.conductEspionage(p, target, action);
+        if (!result.success) {
+            this.engine.addEvent('game', result.reason);
+        }
+        this.ui.render();
+    }
+
     async restart() {
         document.getElementById('gameover-screen').classList.remove('active');
         const player = this.saveSystem.currentPlayer;
