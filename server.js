@@ -28,7 +28,9 @@ const MIME_TYPES = {
 };
 
 function serveStatic(req, res) {
-    let filePath = path.join(__dirname, req.url === '/' ? 'index.html' : req.url);
+    // Strip query params and hash
+    const urlPath = req.url.split('?')[0].split('#')[0];
+    let filePath = path.join(__dirname, urlPath === '/' ? 'index.html' : decodeURIComponent(urlPath));
     const ext = path.extname(filePath);
     const mime = MIME_TYPES[ext] || 'application/octet-stream';
 
@@ -40,7 +42,7 @@ function serveStatic(req, res) {
         return;
     }
 
-    if (!fs.existsSync(filePath)) {
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
         res.writeHead(404);
         res.end('Not Found');
         return;
@@ -102,23 +104,34 @@ async function handleAPI(req, res) {
 
         // POST /api/profiles - create or get player
         if (route === '/api/profiles' && req.method === 'POST') {
-            const body = JSON.parse(await readBody(req));
+            const rawBody = await readBody(req);
+            let body;
+            try {
+                body = JSON.parse(rawBody);
+            } catch {
+                sendJSON(res, { error: 'Invalid JSON' }, 400);
+                return;
+            }
+            if (!body.name || typeof body.name !== 'string' || body.name.trim().length === 0) {
+                sendJSON(res, { error: 'Name is required' }, 400);
+                return;
+            }
             const profiles = getProfiles();
 
             // Find existing by name (case-insensitive)
             const existingKey = Object.keys(profiles).find(
-                k => profiles[k].name.toLowerCase() === body.name.toLowerCase()
+                k => profiles[k].name.toLowerCase() === body.name.trim().toLowerCase()
             );
 
             if (existingKey) {
                 profiles[existingKey].lastSeen = new Date().toISOString();
-                profiles[existingKey].totalSessions++;
+                profiles[existingKey].totalSessions = (profiles[existingKey].totalSessions || 0) + 1;
                 saveProfiles(profiles);
                 sendJSON(res, { id: existingKey, ...profiles[existingKey], isReturning: true });
             } else {
                 const id = 'player_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5);
                 const newPlayer = {
-                    name: body.name,
+                    name: body.name.trim(),
                     createdAt: new Date().toISOString(),
                     lastSeen: new Date().toISOString(),
                     totalSessions: 1,
@@ -139,7 +152,18 @@ async function handleAPI(req, res) {
         // PUT /api/profiles/:id - update profile (game result)
         if (route.startsWith('/api/profiles/') && req.method === 'PUT') {
             const id = route.split('/')[3];
-            const body = JSON.parse(await readBody(req));
+            if (!id) {
+                sendJSON(res, { error: 'Missing profile ID' }, 400);
+                return;
+            }
+            const rawBody = await readBody(req);
+            let body;
+            try {
+                body = JSON.parse(rawBody);
+            } catch {
+                sendJSON(res, { error: 'Invalid JSON' }, 400);
+                return;
+            }
             const profiles = getProfiles();
 
             if (!profiles[id]) {
@@ -156,7 +180,18 @@ async function handleAPI(req, res) {
         // POST /api/saves/:playerId - save game
         if (route.startsWith('/api/saves/') && req.method === 'POST') {
             const playerId = route.split('/')[3];
-            const body = JSON.parse(await readBody(req));
+            if (!playerId) {
+                sendJSON(res, { error: 'Missing player ID' }, 400);
+                return;
+            }
+            const rawBody = await readBody(req);
+            let body;
+            try {
+                body = JSON.parse(rawBody);
+            } catch {
+                sendJSON(res, { error: 'Invalid JSON' }, 400);
+                return;
+            }
             const filePath = getSaveFilePath(playerId);
             fs.writeFileSync(filePath, JSON.stringify(body, null, 2));
             sendJSON(res, { success: true, savedAt: new Date().toISOString() });
@@ -166,6 +201,10 @@ async function handleAPI(req, res) {
         // GET /api/saves/:playerId - load game
         if (route.startsWith('/api/saves/') && req.method === 'GET') {
             const playerId = route.split('/')[3];
+            if (!playerId) {
+                sendJSON(res, null);
+                return;
+            }
             const filePath = getSaveFilePath(playerId);
             if (fs.existsSync(filePath)) {
                 const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
@@ -179,6 +218,10 @@ async function handleAPI(req, res) {
         // DELETE /api/saves/:playerId - delete save
         if (route.startsWith('/api/saves/') && req.method === 'DELETE') {
             const playerId = route.split('/')[3];
+            if (!playerId) {
+                sendJSON(res, { error: 'Missing player ID' }, 400);
+                return;
+            }
             const filePath = getSaveFilePath(playerId);
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             sendJSON(res, { success: true });
@@ -194,6 +237,18 @@ async function handleAPI(req, res) {
 
 // --- HTTP Server ---
 const server = http.createServer(async (req, res) => {
+    // Add CORS headers for local development
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Handle preflight
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+
     if (req.url.startsWith('/api/')) {
         await handleAPI(req, res);
     } else {

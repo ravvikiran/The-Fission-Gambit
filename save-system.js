@@ -12,53 +12,71 @@ class SaveSystem {
     // --- Player Profile Management ---
 
     async login(name) {
-        const res = await fetch(`${this.API_BASE}/profiles`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name }),
-        });
-        const player = await res.json();
-        this.currentPlayer = player;
-        return player;
+        try {
+            const res = await fetch(`${this.API_BASE}/profiles`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name }),
+            });
+            if (!res.ok) throw new Error(`Login failed: ${res.status}`);
+            const player = await res.json();
+            this.currentPlayer = player;
+            return player;
+        } catch (err) {
+            console.error('Login error:', err);
+            throw err;
+        }
     }
 
     async updateProfile(playerId, data) {
-        const res = await fetch(`${this.API_BASE}/profiles/${playerId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
-        });
-        return await res.json();
+        try {
+            const res = await fetch(`${this.API_BASE}/profiles/${playerId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            if (!res.ok) throw new Error(`Update failed: ${res.status}`);
+            return await res.json();
+        } catch (err) {
+            console.error('Profile update error:', err);
+            return null;
+        }
     }
 
     async recordGameResult(playerId, result) {
-        // Fetch current profile first
-        const profiles = await (await fetch(`${this.API_BASE}/profiles`)).json();
-        const player = profiles[playerId];
-        if (!player) return;
+        try {
+            // Fetch current profile first
+            const res = await fetch(`${this.API_BASE}/profiles`);
+            if (!res.ok) return;
+            const profiles = await res.json();
+            const player = profiles[playerId];
+            if (!player) return;
 
-        player.totalGamesPlayed++;
-        if (result.won) player.totalWins++;
-        else player.totalLosses++;
-        if (result.score > (player.bestScore || 0)) player.bestScore = result.score;
+            player.totalGamesPlayed = (player.totalGamesPlayed || 0) + 1;
+            if (result.won) player.totalWins = (player.totalWins || 0) + 1;
+            else player.totalLosses = (player.totalLosses || 0) + 1;
+            if (result.score > (player.bestScore || 0)) player.bestScore = result.score;
 
-        // Keep last 10 game history entries
-        if (!player.history) player.history = [];
-        player.history.unshift({
-            date: new Date().toISOString(),
-            civName: result.civName,
-            turns: result.turns,
-            won: result.won,
-            victoryType: result.victoryType,
-            score: result.score,
-        });
-        if (player.history.length > 10) player.history.pop();
+            // Keep last 10 game history entries
+            if (!player.history) player.history = [];
+            player.history.unshift({
+                date: new Date().toISOString(),
+                civName: result.civName,
+                turns: result.turns,
+                won: result.won,
+                victoryType: result.victoryType,
+                score: result.score,
+            });
+            if (player.history.length > 10) player.history.pop();
 
-        // Check achievements
-        this.checkAchievements(player, result);
+            // Check achievements
+            this.checkAchievements(player, result);
 
-        await this.updateProfile(playerId, player);
-        this.currentPlayer = { id: playerId, ...player };
+            await this.updateProfile(playerId, player);
+            this.currentPlayer = { id: playerId, ...player };
+        } catch (err) {
+            console.error('Error recording game result:', err);
+        }
     }
 
     checkAchievements(player, result) {
@@ -129,26 +147,47 @@ class SaveSystem {
             events: gameEngine.events.slice(0, 20),
         };
 
-        await fetch(`${this.API_BASE}/saves/${playerId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(state),
-        });
+        try {
+            await fetch(`${this.API_BASE}/saves/${playerId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(state),
+            });
+        } catch (err) {
+            console.error('Save failed:', err);
+        }
     }
 
     async loadGame(playerId) {
-        const res = await fetch(`${this.API_BASE}/saves/${playerId}`);
-        const data = await res.json();
-        return data;
+        try {
+            const res = await fetch(`${this.API_BASE}/saves/${playerId}`);
+            if (!res.ok) return null;
+            const data = await res.json();
+            // Server returns null when no save exists
+            if (!data || Object.keys(data).length === 0) return null;
+            return data;
+        } catch {
+            return null;
+        }
     }
 
     async deleteSave(playerId) {
-        await fetch(`${this.API_BASE}/saves/${playerId}`, { method: 'DELETE' });
+        try {
+            await fetch(`${this.API_BASE}/saves/${playerId}`, { method: 'DELETE' });
+        } catch {
+            // Silently ignore delete failures
+        }
     }
 
     async hasSavedGame(playerId) {
-        const data = await this.loadGame(playerId);
-        return data !== null;
+        try {
+            const res = await fetch(`${this.API_BASE}/saves/${playerId}`);
+            if (!res.ok) return false;
+            const data = await res.json();
+            return data !== null && data !== undefined && Object.keys(data).length > 0;
+        } catch {
+            return false;
+        }
     }
 
     restoreGame(gameEngine, saveData) {

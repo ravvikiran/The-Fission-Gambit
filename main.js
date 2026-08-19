@@ -23,11 +23,18 @@ class GameApp {
         const name = document.getElementById('player-name-input').value.trim();
         if (!name) return;
 
-        const player = await this.saveSystem.login(name);
-        this.currentPlayerId = player.id;
+        try {
+            const player = await this.saveSystem.login(name);
+            this.currentPlayerId = player.id;
 
-        document.getElementById('login-screen').classList.remove('active');
-        await this.showStartScreen(player);
+            document.getElementById('login-screen').classList.remove('active');
+            await this.showStartScreen(player);
+        } catch (err) {
+            console.error('Login failed:', err);
+            const hint = document.getElementById('login-hint');
+            hint.textContent = 'Connection failed. Make sure the server is running (node server.js).';
+            hint.style.color = 'var(--danger)';
+        }
     }
 
     async showStartScreen(player) {
@@ -139,7 +146,16 @@ class GameApp {
         const btn = document.getElementById('end-turn-btn');
         const newBtn = btn.cloneNode(true);
         btn.parentNode.replaceChild(newBtn, btn);
-        newBtn.addEventListener('click', () => this.endTurn());
+        newBtn.addEventListener('click', async () => {
+            newBtn.disabled = true;
+            newBtn.textContent = 'Processing...';
+            try {
+                await this.endTurn();
+            } finally {
+                newBtn.disabled = false;
+                newBtn.textContent = 'End Turn';
+            }
+        });
     }
 
     async endTurn() {
@@ -152,12 +168,14 @@ class GameApp {
         const victory = this.engine.endTurn();
 
         // Auto-save every turn (async, don't block the UI)
-        this.saveSystem.saveGame(this.currentPlayerId, this.engine);
+        this.saveSystem.saveGame(this.currentPlayerId, this.engine).catch(err => {
+            console.error('Auto-save failed:', err);
+        });
 
         if (victory) {
             await this.handleGameOver(this.engine.winner, this.engine.victoryType);
         } else if (!this.engine.player.alive) {
-            // Find the strongest surviving civ as the eventual winner
+            // Player was eliminated — find the strongest surviving civ
             const aliveCivs = this.engine.getAliveCivs();
             const winner = aliveCivs.length > 0
                 ? aliveCivs.sort((a, b) => b.getScore() - a.getScore())[0]
@@ -225,7 +243,7 @@ class GameApp {
     sendGift(civName) {
         const p = this.engine.player;
         const target = this.engine.civilizations.find(c => c.name === civName);
-        if (!target || p.gold < 50) return;
+        if (!target || !target.alive || p.gold < 50) return;
         this.engine.proposeTrade(p, target, 50);
         this.ui.render();
     }
@@ -233,7 +251,7 @@ class GameApp {
     proposeAlliance(civName) {
         const p = this.engine.player;
         const target = this.engine.civilizations.find(c => c.name === civName);
-        if (!target) return;
+        if (!target || !target.alive) return;
         const success = this.engine.proposeAlliance(p, target);
         if (!success) {
             this.engine.addEvent('peace', `${target.name} rejected the alliance proposal.`);
@@ -244,7 +262,7 @@ class GameApp {
     declareWar(civName) {
         const p = this.engine.player;
         const target = this.engine.civilizations.find(c => c.name === civName);
-        if (!target) return;
+        if (!target || !target.alive) return;
         this.engine.setRelation(p, target, 'war');
         this.engine.addEvent('war', `⚔️ ${p.name} declared WAR on ${target.name}!`);
         this.ui.render();
@@ -253,7 +271,7 @@ class GameApp {
     attackCiv(civName) {
         const p = this.engine.player;
         const target = this.engine.civilizations.find(c => c.name === civName);
-        if (!target || p.relations[civName]?.status !== 'war') return;
+        if (!target || !target.alive || p.relations[civName]?.status !== 'war') return;
         this.engine.attack(p, target);
         this.ui.render();
     }
@@ -261,7 +279,13 @@ class GameApp {
     nukeCity(civName) {
         const p = this.engine.player;
         const target = this.engine.civilizations.find(c => c.name === civName);
-        if (!target || !p.hasNukes) return;
+        if (!target || !p.hasNukes || !target.alive) return;
+        // Must be at war to nuke
+        if (p.relations[civName]?.status !== 'war') {
+            this.engine.addEvent('game', `Must be at war to launch a nuclear strike.`);
+            this.ui.render();
+            return;
+        }
         this.engine.launchNuke(p, target);
         this.ui.render();
     }
@@ -285,7 +309,7 @@ class GameApp {
     conductEspionage(civName, action) {
         const p = this.engine.player;
         const target = this.engine.civilizations.find(c => c.name === civName);
-        if (!target) return;
+        if (!target || !target.alive) return;
         const result = this.engine.conductEspionage(p, target, action);
         if (!result.success) {
             this.engine.addEvent('game', result.reason);
@@ -296,7 +320,12 @@ class GameApp {
     async restart() {
         document.getElementById('gameover-screen').classList.remove('active');
         const player = this.saveSystem.currentPlayer;
-        await this.showStartScreen(player);
+        if (player) {
+            await this.showStartScreen(player);
+        } else {
+            // Fallback: show login screen again
+            document.getElementById('login-screen').classList.add('active');
+        }
     }
 }
 

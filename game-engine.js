@@ -75,11 +75,11 @@ const GOVERNMENTS = {
 // RANDOM EVENTS - Triggered each turn with small probability
 // ============================================
 const RANDOM_EVENTS = [
-    { id: 'goldenAge', name: 'Golden Age', desc: 'A period of prosperity!', prob: 0.04, effect: (civ) => { if (civ.goldenAgeTurns <= 0) { civ.goldRate += 5; civ.foodRate += 2; } civ.goldenAgeTurns = 5; } },
+    { id: 'goldenAge', name: 'Golden Age', desc: 'A period of prosperity!', prob: 0.04, effect: (civ) => { if (civ.goldenAgeTurns <= 0) { civ.goldRate += 5; civ.foodRate += 2; civ.goldenAgeTurns = 5; } else { civ.goldenAgeTurns = 5; } } },
     { id: 'plague', name: 'Plague', desc: 'Disease sweeps the land!', prob: 0.03, effect: (civ) => { civ.population = Math.max(3, civ.population - Math.floor(civ.population * 0.2)); } },
     { id: 'barbarianRaid', name: 'Barbarian Raid', desc: 'Raiders attack the borders!', prob: 0.05, effect: (civ) => { civ.gold = Math.max(0, civ.gold - 30); civ.military = Math.max(0, civ.military - 2); } },
     { id: 'tradeWindfall', name: 'Trade Windfall', desc: 'Merchants bring riches!', prob: 0.04, effect: (civ) => { civ.gold += 80; } },
-    { id: 'scientificBreakthrough', name: 'Scientific Breakthrough', desc: 'Eureka! Research accelerated!', prob: 0.03, effect: (civ) => { civ.researchProgress += 20; } },
+    { id: 'scientificBreakthrough', name: 'Scientific Breakthrough', desc: 'Eureka! Research accelerated!', prob: 0.03, effect: (civ) => { if (civ.currentResearch) civ.researchProgress += 20; } },
     { id: 'harvest', name: 'Bountiful Harvest', desc: 'The farms overflow with food!', prob: 0.05, effect: (civ) => { civ.food += 50; } },
     { id: 'earthquake', name: 'Earthquake', desc: 'An earthquake damages infrastructure!', prob: 0.02, effect: (civ) => { civ.production = Math.max(0, civ.production - 20); } },
     { id: 'refugees', name: 'Refugees Arrive', desc: 'Displaced people seek shelter.', prob: 0.03, effect: (civ) => { civ.population += 2; civ.food -= 10; } },
@@ -246,7 +246,7 @@ class GameEngine {
         const gov = GOVERNMENTS[govId];
         if (!gov) return;
         Object.entries(gov.effects).forEach(([key, val]) => {
-            if (key === 'militaryBonus') civ.military += val;
+            if (key === 'militaryBonus') civ.military = Math.max(0, civ.military + val);
             else if (civ[key] !== undefined) civ[key] += val;
         });
     }
@@ -533,7 +533,7 @@ class GameEngine {
         const oldGov = GOVERNMENTS[civ.government];
         if (oldGov) {
             Object.entries(oldGov.effects).forEach(([key, val]) => {
-                if (key === 'militaryBonus') civ.military -= val;
+                if (key === 'militaryBonus') civ.military = Math.max(0, civ.military - val);
                 else if (civ[key] !== undefined) civ[key] -= val;
             });
         }
@@ -541,7 +541,7 @@ class GameEngine {
         // Apply new government effects
         civ.government = govId;
         Object.entries(gov.effects).forEach(([key, val]) => {
-            if (key === 'militaryBonus') civ.military += val;
+            if (key === 'militaryBonus') civ.military = Math.max(0, civ.military + val);
             else if (civ[key] !== undefined) civ[key] += val;
         });
 

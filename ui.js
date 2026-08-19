@@ -9,6 +9,13 @@ class GameUI {
         this.setupTabs();
     }
 
+    // Sanitize strings before inserting into HTML to prevent XSS
+    escapeHTML(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
     setupTabs() {
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
@@ -106,7 +113,7 @@ class GameUI {
             <div class="overview-grid">
                 <div class="overview-card">
                     <h4>🏛️ Your Civilization</h4>
-                    <div class="value">${p.name}</div>
+                    <div class="value">${this.escapeHTML(p.name)}</div>
                     <p style="color:var(--text-secondary);font-size:0.85rem;margin-top:0.3rem;">
                         Score: ${p.getScore()} | Era: ${p.getEraName()} | Gov: ${GOVERNMENTS[p.government]?.name || 'Despotism'}
                     </p>
@@ -339,42 +346,44 @@ class GameUI {
         const civsHTML = this.game.civilizations.filter(c => c !== p).map(civ => {
             const relation = p.relations[civ.name] || { status: 'neutral', value: 50 };
             const alive = civ.alive;
+            const safeName = this.escapeHTML(civ.name);
+            const jsName = civ.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
             if (!alive) {
                 return `<div class="civ-card" style="opacity:0.5;">
-                    <h4>${civ.name} <span class="relation hostile">💀 Eliminated</span></h4>
+                    <h4>${safeName} <span class="relation hostile">💀 Eliminated</span></h4>
                 </div>`;
             }
 
             const actions = [];
             if (relation.status !== 'war' && relation.status !== 'allied') {
-                actions.push(`<button class="btn-secondary" onclick="window.gameApp.sendGift('${civ.name}')">Send Gift (50💰)</button>`);
+                actions.push(`<button class="btn-secondary" onclick="window.gameApp.sendGift('${jsName}')">Send Gift (50💰)</button>`);
             }
             if (relation.status === 'friendly' && relation.value >= 70) {
-                actions.push(`<button class="btn-secondary" onclick="window.gameApp.proposeAlliance('${civ.name}')">Propose Alliance</button>`);
+                actions.push(`<button class="btn-secondary" onclick="window.gameApp.proposeAlliance('${jsName}')">Propose Alliance</button>`);
             }
             if (relation.status !== 'war' && relation.status !== 'allied') {
-                actions.push(`<button class="btn-danger" onclick="window.gameApp.declareWar('${civ.name}')">Declare War</button>`);
+                actions.push(`<button class="btn-danger" onclick="window.gameApp.declareWar('${jsName}')">Declare War</button>`);
             }
             if (relation.status === 'war') {
-                actions.push(`<button class="btn-secondary" onclick="window.gameApp.attackCiv('${civ.name}')">⚔️ Attack</button>`);
+                actions.push(`<button class="btn-secondary" onclick="window.gameApp.attackCiv('${jsName}')">⚔️ Attack</button>`);
                 if (p.hasNukes) {
-                    actions.push(`<button class="btn-danger" onclick="window.gameApp.nukeCity('${civ.name}')">☢️ Launch Nuke</button>`);
+                    actions.push(`<button class="btn-danger" onclick="window.gameApp.nukeCity('${jsName}')">☢️ Launch Nuke</button>`);
                 }
             }
             // Espionage (available after Classical era, not during alliance)
             if (relation.status !== 'allied' && p.getEra() >= 1 && p.espionageCooldown === 0 && p.gold >= 75) {
-                actions.push(`<button class="btn-secondary" onclick="window.gameApp.conductEspionage('${civ.name}','stealTech')">🕵️ Steal Tech (75💰)</button>`);
-                actions.push(`<button class="btn-secondary" onclick="window.gameApp.conductEspionage('${civ.name}','sabotage')">🕵️ Sabotage (75💰)</button>`);
+                actions.push(`<button class="btn-secondary" onclick="window.gameApp.conductEspionage('${jsName}','stealTech')">🕵️ Steal Tech (75💰)</button>`);
+                actions.push(`<button class="btn-secondary" onclick="window.gameApp.conductEspionage('${jsName}','sabotage')">🕵️ Sabotage (75💰)</button>`);
             }
 
             return `<div class="civ-card">
-                <h4>${civ.name} <span class="relation ${relation.status}">${relation.status.toUpperCase()}</span></h4>
+                <h4>${safeName} <span class="relation ${relation.status}">${relation.status.toUpperCase()}</span></h4>
                 <div class="civ-stats">
                     <span>⚔️ ${civ.getTotalMilitary()}</span>
                     <span>👥 ${civ.population}</span>
                     <span>📚 ${civ.techs.length} techs</span>
-                    <span>Strategy: ${civ.strategy}</span>
+                    <span>Strategy: ${this.escapeHTML(civ.strategy)}</span>
                 </div>
                 <div class="diplomacy-actions">${actions.join('')}</div>
             </div>`;
