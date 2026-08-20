@@ -33,6 +33,8 @@ class GameUI {
     render() {
         this.renderResources();
         this.renderHeader();
+        this.renderAlerts();
+        this.renderCivVisual();
         this.renderEvents();
 
         switch (this.currentTab) {
@@ -47,6 +49,178 @@ class GameUI {
     renderHeader() {
         document.getElementById('turn-display').textContent = `Turn ${this.game.turn}`;
         document.getElementById('era-display').textContent = this.game.player.getEraName();
+    }
+
+    renderAlerts() {
+        const p = this.game.player;
+        const alertBar = document.getElementById('alert-bar');
+        const alerts = [];
+        const aliveCivs = this.game.getAliveCivs().filter(c => c !== p);
+
+        // Check if any AI is close to a victory condition
+        for (const civ of aliveCivs) {
+            // Economic victory threat (>70% of goal)
+            if (civ.gold >= 3500) {
+                const pct = Math.floor((civ.gold / 5000) * 100);
+                alerts.push({ type: 'danger', text: `💰 ${this.escapeHTML(civ.name)} has ${Math.floor(civ.gold)} gold (${pct}% to Economic Victory)` });
+            }
+
+            // Science victory threat
+            if (civ.techs.includes('rocketry') && !civ.techs.includes('spaceTravel')) {
+                alerts.push({ type: 'warning', text: `🔬 ${this.escapeHTML(civ.name)} is researching toward Space Travel!` });
+            }
+            if (civ.techs.includes('computers') && civ.techs.includes('rocketry')) {
+                alerts.push({ type: 'danger', text: `🚀 ${this.escapeHTML(civ.name)} is one tech away from Science Victory!` });
+            }
+
+            // Diplomatic victory threat
+            const otherAlive = aliveCivs.filter(c => c !== civ);
+            if (otherAlive.length > 0) {
+                const alliedCount = otherAlive.filter(c => civ.relations[c.name]?.status === 'allied').length;
+                // Also check if allied with player
+                const alliedWithPlayer = civ.relations[p.name]?.status === 'allied' ? 1 : 0;
+                const totalNeeded = aliveCivs.length; // needs all other alive civs allied (including player)
+                const totalAllied = alliedCount + alliedWithPlayer;
+                if (totalAllied >= totalNeeded - 1 && totalNeeded > 1) {
+                    alerts.push({ type: 'danger', text: `🤝 ${this.escapeHTML(civ.name)} is one alliance away from Diplomatic Victory!` });
+                } else if (totalAllied >= Math.floor(totalNeeded * 0.6) && totalNeeded > 2) {
+                    alerts.push({ type: 'warning', text: `🤝 ${this.escapeHTML(civ.name)} is building alliances (${totalAllied}/${totalNeeded} needed)` });
+                }
+            }
+
+            // Military threat — someone is much stronger
+            if (civ.getTotalMilitary() > p.getTotalMilitary() * 2 && civ.relations[p.name]?.status !== 'allied') {
+                alerts.push({ type: 'warning', text: `⚔️ ${this.escapeHTML(civ.name)} has overwhelming military (${civ.getTotalMilitary()} vs your ${p.getTotalMilitary()})` });
+            }
+
+            // Imminent war threat
+            if (civ.relations[p.name]?.status === 'hostile' && civ.getTotalMilitary() > p.getTotalMilitary()) {
+                alerts.push({ type: 'danger', text: `🗡️ ${this.escapeHTML(civ.name)} is hostile and stronger — war may be imminent!` });
+            }
+
+            // Nuke threat
+            if (civ.hasNukes && civ.relations[p.name]?.status === 'war') {
+                alerts.push({ type: 'danger', text: `☢️ ${this.escapeHTML(civ.name)} has nuclear weapons and you're at war!` });
+            }
+        }
+
+        // Player's own issues
+        if (p.goldRate < 0 || (p.gold < 50 && p.goldRate <= 2)) {
+            alerts.push({ type: 'info', text: `📉 Your economy is struggling — gold income: ${p.goldRate}/turn` });
+        }
+
+        if (p.food < p.population * 2 && p.foodRate <= p.population) {
+            alerts.push({ type: 'info', text: `🌾 Food shortage risk — population may starve next turn` });
+        }
+
+        // Render
+        if (alerts.length > 0) {
+            alertBar.classList.add('has-alerts');
+            alertBar.innerHTML = alerts.map(a =>
+                `<span class="alert-item ${a.type}">${a.text}</span>`
+            ).join('');
+        } else {
+            alertBar.classList.remove('has-alerts');
+            alertBar.innerHTML = '';
+        }
+    }
+
+    renderCivVisual() {
+        const p = this.game.player;
+        const visual = document.getElementById('civ-visual');
+
+        // Build visual clusters based on actual game state
+        const sections = [];
+
+        // Population (people icons)
+        const popCount = Math.min(p.population, 20); // cap visual at 20 icons
+        const popIcons = '👤'.repeat(Math.min(popCount, 10)) + (popCount > 10 ? `<span class="viz-count">+${popCount - 10}</span>` : '');
+        sections.push(`<div class="viz-group"><span class="viz-label">Pop</span>${popIcons}</div>`);
+
+        sections.push('<span class="viz-separator"></span>');
+
+        // Agriculture/Farms
+        const farmCount = p.buildings.filter(b => b === 'farm').length;
+        const foodBuildings = p.buildings.filter(b => BUILDINGS[b]?.effect.foodRate).length;
+        if (foodBuildings > 0 || p.foodRate > 3) {
+            const farmIcons = '🌾'.repeat(Math.min(foodBuildings, 5)) || '🌾';
+            sections.push(`<div class="viz-group"><span class="viz-label">Farms</span>${farmIcons}</div>`);
+        }
+
+        // Mining/Production
+        const prodBuildings = p.buildings.filter(b => BUILDINGS[b]?.effect.productionRate).length;
+        if (prodBuildings > 0 || p.productionRate > 3) {
+            const mineIcons = '⛏️'.repeat(Math.min(prodBuildings, 5)) || '⛏️';
+            sections.push(`<div class="viz-group"><span class="viz-label">Mines</span>${mineIcons}</div>`);
+        }
+
+        // Commerce/Gold
+        const goldBuildings = p.buildings.filter(b => BUILDINGS[b]?.effect.goldRate).length;
+        if (goldBuildings > 0) {
+            const goldIcons = '🏪'.repeat(Math.min(goldBuildings, 5));
+            sections.push(`<div class="viz-group"><span class="viz-label">Trade</span>${goldIcons}</div>`);
+        }
+
+        // Science
+        const sciBuildings = p.buildings.filter(b => BUILDINGS[b]?.effect.scienceRate).length;
+        if (sciBuildings > 0) {
+            const sciIcons = '📖'.repeat(Math.min(sciBuildings, 5));
+            sections.push(`<div class="viz-group"><span class="viz-label">Science</span>${sciIcons}</div>`);
+        }
+
+        sections.push('<span class="viz-separator"></span>');
+
+        // Military units visual
+        if (p.units.length > 0) {
+            const unitVisuals = [];
+            const unitCounts = {};
+            p.units.forEach(u => { unitCounts[u] = (unitCounts[u] || 0) + 1; });
+
+            const unitIcons = {
+                warrior: '🗡️',
+                archer: '🏹',
+                knight: '🐴',
+                musketeer: '🔫',
+                artillery: '💣',
+                tank: '🛡️',
+                nuke: '☢️',
+            };
+
+            for (const [unitId, count] of Object.entries(unitCounts)) {
+                const icon = unitIcons[unitId] || '⚔️';
+                if (count <= 3) {
+                    unitVisuals.push(icon.repeat(count));
+                } else {
+                    unitVisuals.push(`${icon}<span class="viz-count">×${count}</span>`);
+                }
+            }
+
+            sections.push(`<div class="viz-group"><span class="viz-label">Army</span>${unitVisuals.join(' ')}</div>`);
+        } else {
+            sections.push(`<div class="viz-group"><span class="viz-label">Army</span><span style="font-size:0.75rem;color:var(--text-secondary);">None</span></div>`);
+        }
+
+        // Wonders (trophy icons)
+        if (p.wonders.length > 0) {
+            sections.push('<span class="viz-separator"></span>');
+            const wonderIcons = p.wonders.map(w => '🏛️').join('');
+            sections.push(`<div class="viz-group"><span class="viz-label">Wonders</span>${wonderIcons}</div>`);
+        }
+
+        // Government icon
+        const govIcons = {
+            despotism: '👑',
+            republic: '🏛️',
+            monarchy: '♔',
+            democracy: '🗳️',
+            communism: '☭',
+            theocracy: '⛪',
+        };
+        const govIcon = govIcons[p.government] || '👑';
+        sections.push('<span class="viz-separator"></span>');
+        sections.push(`<div class="viz-group"><span class="viz-label">Gov</span><span class="viz-icon">${govIcon}</span></div>`);
+
+        visual.innerHTML = sections.join('');
     }
 
     renderResources() {
