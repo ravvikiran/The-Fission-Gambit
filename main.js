@@ -20,7 +20,9 @@ class GameApp {
     }
 
     async login() {
-        const name = document.getElementById('player-name-input').value.trim();
+        const nameInput = document.getElementById('player-name-input').value.trim();
+        // Basic validation: 1-20 chars, strip dangerous characters
+        const name = nameInput.replace(/[<>"'&]/g, '');
         if (!name) return;
 
         try {
@@ -125,9 +127,11 @@ class GameApp {
     }
 
     async startNewGame() {
-        const name = document.getElementById('player-civ-name').value.trim() || 'Roma';
-        const aiCount = parseInt(document.getElementById('ai-count').value);
-        const difficulty = document.getElementById('difficulty').value;
+        const nameInput = document.getElementById('player-civ-name').value.trim();
+        // Validate name: must be 1-12 non-empty characters, no HTML
+        const name = nameInput.replace(/[<>"'&]/g, '') || 'Roma';
+        const aiCount = parseInt(document.getElementById('ai-count').value) || 3;
+        const difficulty = document.getElementById('difficulty').value || 'normal';
 
         // Delete old save if exists
         await this.saveSystem.deleteSave(this.currentPlayerId);
@@ -168,9 +172,11 @@ class GameApp {
         const victory = this.engine.endTurn();
 
         // Auto-save every turn (async, don't block the UI)
-        this.saveSystem.saveGame(this.currentPlayerId, this.engine).catch(err => {
-            console.error('Auto-save failed:', err);
-        });
+        if (this.currentPlayerId) {
+            this.saveSystem.saveGame(this.currentPlayerId, this.engine).catch(err => {
+                console.error('Auto-save failed:', err);
+            });
+        }
 
         if (victory) {
             await this.handleGameOver(this.engine.winner, this.engine.victoryType);
@@ -179,8 +185,10 @@ class GameApp {
             const aliveCivs = this.engine.getAliveCivs();
             const winner = aliveCivs.length > 0
                 ? aliveCivs.sort((a, b) => b.getScore() - a.getScore())[0]
-                : this.engine.civilizations.find(c => !c.isPlayer);
-            await this.handleGameOver(winner, 'domination');
+                : null;
+            if (winner) {
+                await this.handleGameOver(winner, 'domination');
+            }
         } else {
             this.ui.render();
         }
@@ -280,6 +288,12 @@ class GameApp {
         const p = this.engine.player;
         const target = this.engine.civilizations.find(c => c.name === civName);
         if (!target || !p.hasNukes || !target.alive) return;
+        // Must have a nuke unit to launch
+        if (!p.units.includes('nuke')) {
+            this.engine.addEvent('game', `No nuclear missiles available. Train one first.`);
+            this.ui.render();
+            return;
+        }
         // Must be at war to nuke
         if (p.relations[civName]?.status !== 'war') {
             this.engine.addEvent('game', `Must be at war to launch a nuclear strike.`);
@@ -319,11 +333,29 @@ class GameApp {
 
     async restart() {
         document.getElementById('gameover-screen').classList.remove('active');
+        // Re-fetch player profile to get updated stats after game result was recorded
+        if (this.currentPlayerId) {
+            try {
+                const res = await fetch(`${this.saveSystem.API_BASE}/profiles`);
+                if (res.ok) {
+                    const profiles = await res.json();
+                    const profile = profiles[this.currentPlayerId];
+                    if (profile) {
+                        const player = { id: this.currentPlayerId, ...profile };
+                        this.saveSystem.currentPlayer = player;
+                        await this.showStartScreen(player);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to refresh profile:', err);
+            }
+        }
+        // Fallback: use cached player or show login
         const player = this.saveSystem.currentPlayer;
         if (player) {
             await this.showStartScreen(player);
         } else {
-            // Fallback: show login screen again
             document.getElementById('login-screen').classList.add('active');
         }
     }

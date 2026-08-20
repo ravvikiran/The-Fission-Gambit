@@ -59,12 +59,14 @@ class GameUI {
         document.getElementById('res-population').textContent = p.population;
 
         const goldRate = document.getElementById('res-gold-rate');
-        const effectiveGoldRate = p.goldRate - (p.warWeariness > 0 ? Math.floor(p.warWeariness * 2) : 0);
+        const goldenAgeGoldBonus = p.goldenAgeTurns > 0 ? 5 : 0;
+        const effectiveGoldRate = p.goldRate + goldenAgeGoldBonus - (p.warWeariness > 0 ? Math.floor(p.warWeariness * 2) : 0);
         goldRate.textContent = `${effectiveGoldRate >= 0 ? '+' : ''}${effectiveGoldRate}/t`;
         goldRate.className = effectiveGoldRate >= 0 ? 'rate' : 'rate negative';
 
         const foodRate = document.getElementById('res-food-rate');
-        const netFood = p.foodRate - p.population;
+        const goldenAgeFoodBonus = p.goldenAgeTurns > 0 ? 2 : 0;
+        const netFood = p.foodRate + goldenAgeFoodBonus - p.population;
         foodRate.textContent = `${netFood >= 0 ? '+' : ''}${netFood}/t`;
         foodRate.className = netFood >= 0 ? 'rate' : 'rate negative';
 
@@ -86,7 +88,7 @@ class GameUI {
             else if (e.type === 'science') cls = 'science';
             else if (e.type === 'build') cls = 'build';
             else if (e.type === 'nuke') cls = 'nuke';
-            return `<div class="log-entry ${cls}"><span class="log-turn">T${e.turn}</span> ${e.message}</div>`;
+            return `<div class="log-entry ${cls}"><span class="log-turn">T${e.turn}</span> ${this.escapeHTML(e.message)}</div>`;
         }).join('');
     }
 
@@ -301,6 +303,7 @@ class GameUI {
         const unitsHTML = Object.entries(MILITARY_UNITS).filter(([id, unit]) => {
             if (unit.era > era) return false;
             if (unit.isNuke && !p.hasNukes) return false;
+            if (unit.isNuke && !p.techs.includes('nuclearFission')) return false;
             return true;
         }).map(([id, unit]) => {
             // Apply Manhattan Project discount
@@ -367,7 +370,7 @@ class GameUI {
             }
             if (relation.status === 'war') {
                 actions.push(`<button class="btn-secondary" onclick="window.gameApp.attackCiv('${jsName}')">⚔️ Attack</button>`);
-                if (p.hasNukes) {
+                if (p.hasNukes && p.units.includes('nuke')) {
                     actions.push(`<button class="btn-danger" onclick="window.gameApp.nukeCity('${jsName}')">☢️ Launch Nuke</button>`);
                 }
             }

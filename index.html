@@ -14,7 +14,7 @@
             <p class="subtitle">Build. Expand. Conquer. Survive.</p>
             <div class="start-options">
                 <label>Enter your name to continue:</label>
-                <input type="text" id="player-name-input" placeholder="Your name..." maxlength="20">
+                <input type="text" id="player-name-input" placeholder="Your name..." maxlength="20" aria-label="Player name">
                 <button id="login-btn" class="btn-primary">Enter</button>
                 <p id="login-hint" style="color:var(--text-secondary);font-size:0.8rem;margin-top:0.5rem;">
                     Returning players are recognized automatically.
@@ -33,14 +33,14 @@
                     <hr style="border-color:var(--bg-light);margin:1rem 0;">
                 </div>
                 <label>Your Civilization Name:</label>
-                <input type="text" id="player-civ-name" value="Roma" maxlength="12">
+                <input type="text" id="player-civ-name" value="Roma" maxlength="12" aria-label="Civilization name">
                 <label>Number of AI Opponents:</label>
-                <select id="ai-count">
+                <select id="ai-count" aria-label="Number of AI opponents">
                     <option value="2">2 Opponents</option>
                     <option value="3" selected>3 Opponents</option>
                 </select>
                 <label>Difficulty:</label>
-                <select id="difficulty">
+                <select id="difficulty" aria-label="Difficulty level">
                     <option value="easy">Easy</option>
                     <option value="normal" selected>Normal</option>
                     <option value="hard">Hard</option>
@@ -57,7 +57,7 @@
                     <span id="era-display">Ancient Era</span>
                 </div>
                 <div class="header-right">
-                    <button id="end-turn-btn" class="btn-primary">End Turn</button>
+                    <button id="end-turn-btn" class="btn-primary" aria-label="End current turn">End Turn</button>
                 </div>
             </header>
 
@@ -94,7 +94,7 @@
                 </div>
 
                 <!-- Event Log -->
-                <div id="event-log">
+                <div id="event-log" role="log" aria-live="polite" aria-label="Game events">
                     <h3>📜 Events</h3>
                     <div id="log-entries"></div>
                 </div>

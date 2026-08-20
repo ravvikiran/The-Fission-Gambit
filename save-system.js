@@ -125,20 +125,20 @@ class SaveSystem {
                 foodRate: civ.foodRate,
                 productionRate: civ.productionRate,
                 scienceRate: civ.scienceRate,
-                buildings: civ.buildings,
-                techs: civ.techs,
-                units: civ.units,
+                buildings: [...civ.buildings],
+                techs: [...civ.techs],
+                units: [...civ.units],
                 currentResearch: civ.currentResearch,
                 researchProgress: civ.researchProgress,
                 currentBuild: civ.currentBuild,
                 buildProgress: civ.buildProgress,
-                relations: civ.relations,
+                relations: JSON.parse(JSON.stringify(civ.relations)),
                 hasNukes: civ.hasNukes,
                 nukesUsed: civ.nukesUsed,
                 strategy: civ.strategy,
                 strategyLock: civ.strategyLock,
                 government: civ.government,
-                wonders: civ.wonders,
+                wonders: [...civ.wonders],
                 warWeariness: civ.warWeariness,
                 goldenAgeTurns: civ.goldenAgeTurns,
                 espionageCooldown: civ.espionageCooldown,
@@ -148,13 +148,17 @@ class SaveSystem {
         };
 
         try {
-            await fetch(`${this.API_BASE}/saves/${playerId}`, {
+            const res = await fetch(`${this.API_BASE}/saves/${playerId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(state),
             });
+            if (!res.ok) {
+                throw new Error(`Save returned status ${res.status}`);
+            }
         } catch (err) {
             console.error('Save failed:', err);
+            throw err;
         }
     }
 
@@ -197,10 +201,24 @@ class SaveSystem {
         gameEngine.civilizations = [];
         gameEngine.gameOver = false;
         gameEngine.winner = null;
+        gameEngine.victoryType = null;
 
         for (const civData of saveData.civilizations) {
             const civ = new Civilization(civData.name, civData.isPlayer);
-            Object.assign(civ, civData);
+            // Only assign known data properties, preserving prototype methods
+            const safeKeys = [
+                'alive', 'gold', 'food', 'production', 'science', 'population', 'military',
+                'goldRate', 'foodRate', 'productionRate', 'scienceRate',
+                'buildings', 'techs', 'units', 'currentResearch', 'researchProgress',
+                'currentBuild', 'buildProgress', 'relations', 'hasNukes', 'nukesUsed',
+                'strategy', 'strategyLock', 'government', 'wonders',
+                'warWeariness', 'goldenAgeTurns', 'espionageCooldown', 'defenseBonus'
+            ];
+            for (const key of safeKeys) {
+                if (civData[key] !== undefined) {
+                    civ[key] = civData[key];
+                }
+            }
             gameEngine.civilizations.push(civ);
             if (civ.isPlayer) gameEngine.player = civ;
         }

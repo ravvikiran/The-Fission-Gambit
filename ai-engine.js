@@ -18,22 +18,22 @@ class AIEngine {
         this.evaluateStrategy(civ);
 
         // Step 2: Choose research
-        this.chooseResearch(civ);
+        if (civ.alive) this.chooseResearch(civ);
 
         // Step 3: Choose building
-        this.chooseBuilding(civ);
+        if (civ.alive) this.chooseBuilding(civ);
 
         // Step 4: Try to build wonders
-        this.chooseWonder(civ);
+        if (civ.alive) this.chooseWonder(civ);
 
         // Step 5: Consider government change
-        this.chooseGovernment(civ);
+        if (civ.alive) this.chooseGovernment(civ);
 
         // Step 6: Choose military actions
-        this.chooseMilitaryAction(civ);
+        if (civ.alive) this.chooseMilitaryAction(civ);
 
         // Step 7: Diplomatic decisions
-        this.chooseDiplomacy(civ);
+        if (civ.alive) this.chooseDiplomacy(civ);
     }
 
     // ADAPTIVE STRATEGY - evaluates game state each turn and may switch strategy
@@ -44,6 +44,8 @@ class AIEngine {
         }
 
         const aliveCivs = this.game.getAliveCivs();
+        if (aliveCivs.length === 0) return;
+
         const myMilitary = civ.getTotalMilitary();
         const avgMilitary = aliveCivs.reduce((sum, c) => sum + c.getTotalMilitary(), 0) / aliveCivs.length;
         const myScience = civ.scienceRate;
@@ -248,7 +250,7 @@ class AIEngine {
             }
 
             // Use nukes if desperate or very aggressive
-            if (civ.hasNukes && civ.strategy === 'aggressive') {
+            if (civ.hasNukes && civ.units.includes('nuke') && civ.strategy === 'aggressive') {
                 const nukeTargets = this.game.getAliveCivs().filter(c => {
                     if (c === civ) return false;
                     // Nuke if they're about to win

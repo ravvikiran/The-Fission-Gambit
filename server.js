@@ -2,6 +2,7 @@
 // SERVER - Minimal Node.js server for file-based saves
 // Run: node server.js
 // ============================================
+'use strict';
 
 const http = require('http');
 const fs = require('fs');
@@ -76,12 +77,26 @@ function sendJSON(res, data, status = 200) {
 // --- API Handlers ---
 
 function getProfiles() {
-    const data = fs.readFileSync(PROFILES_FILE, 'utf-8');
-    return JSON.parse(data);
+    try {
+        const data = fs.readFileSync(PROFILES_FILE, 'utf-8');
+        return JSON.parse(data);
+    } catch (err) {
+        console.error('Error reading profiles:', err.message);
+        return {};
+    }
 }
 
 function saveProfiles(profiles) {
-    fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles, null, 2));
+    const tempFile = PROFILES_FILE + '.tmp';
+    try {
+        fs.writeFileSync(tempFile, JSON.stringify(profiles, null, 2));
+        fs.renameSync(tempFile, PROFILES_FILE);
+    } catch (err) {
+        console.error('Error saving profiles:', err.message);
+        // Clean up temp file if it exists
+        try { fs.unlinkSync(tempFile); } catch { /* ignore */ }
+        throw err;
+    }
 }
 
 function getSaveFilePath(playerId) {
@@ -171,7 +186,19 @@ async function handleAPI(req, res) {
                 return;
             }
 
-            profiles[id] = { ...profiles[id], ...body };
+            // Only allow updating known profile fields to prevent data corruption
+            const allowedFields = [
+                'name', 'lastSeen', 'totalSessions', 'totalGamesPlayed',
+                'totalWins', 'totalLosses', 'bestScore', 'achievements', 'history'
+            ];
+            const sanitized = {};
+            for (const key of allowedFields) {
+                if (body[key] !== undefined) {
+                    sanitized[key] = body[key];
+                }
+            }
+
+            profiles[id] = { ...profiles[id], ...sanitized };
             saveProfiles(profiles);
             sendJSON(res, { id, ...profiles[id] });
             return;
@@ -260,4 +287,17 @@ server.listen(PORT, () => {
     console.log(`\n  ⚔️  CivAI Game Server running at http://localhost:${PORT}\n`);
     console.log(`  Open your browser and go to: http://localhost:${PORT}`);
     console.log(`  Player data saved in: ${DATA_DIR}\n`);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+    console.log('\n  Shutting down server...');
+    server.close(() => {
+        console.log('  Server closed.');
+        process.exit(0);
+    });
+});
+
+process.on('SIGTERM', () => {
+    server.close(() => process.exit(0));
 });

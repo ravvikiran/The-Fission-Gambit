@@ -75,7 +75,7 @@ const GOVERNMENTS = {
 // RANDOM EVENTS - Triggered each turn with small probability
 // ============================================
 const RANDOM_EVENTS = [
-    { id: 'goldenAge', name: 'Golden Age', desc: 'A period of prosperity!', prob: 0.04, effect: (civ) => { if (civ.goldenAgeTurns <= 0) { civ.goldRate += 5; civ.foodRate += 2; civ.goldenAgeTurns = 5; } else { civ.goldenAgeTurns = 5; } } },
+    { id: 'goldenAge', name: 'Golden Age', desc: 'A period of prosperity!', prob: 0.04, effect: (civ) => { if (civ.goldenAgeTurns <= 0) { civ.goldenAgeTurns = 5; } else { civ.goldenAgeTurns = 5; } } },
     { id: 'plague', name: 'Plague', desc: 'Disease sweeps the land!', prob: 0.03, effect: (civ) => { civ.population = Math.max(3, civ.population - Math.floor(civ.population * 0.2)); } },
     { id: 'barbarianRaid', name: 'Barbarian Raid', desc: 'Raiders attack the borders!', prob: 0.05, effect: (civ) => { civ.gold = Math.max(0, civ.gold - 30); civ.military = Math.max(0, civ.military - 2); } },
     { id: 'tradeWindfall', name: 'Trade Windfall', desc: 'Merchants bring riches!', prob: 0.04, effect: (civ) => { civ.gold += 80; } },
@@ -184,7 +184,7 @@ class Civilization {
     getScore() {
         return (this.population * 2) + (this.buildings.length * 10) +
                (this.techs.length * 15) + (this.getTotalMilitary() * 3) +
-               Math.floor(this.gold / 10);
+               (this.wonders.length * 25) + Math.floor(this.gold / 10);
     }
 }
 
@@ -208,6 +208,9 @@ class GameEngine {
         this.winner = null;
         this.civilizations = [];
 
+        // Clamp aiCount to available names
+        const clampedAiCount = Math.min(Math.max(1, aiCount), AI_CIV_NAMES.length);
+
         // Create player
         this.player = new Civilization(playerName, true);
         this.applyGovernmentEffects(this.player, 'despotism');
@@ -215,7 +218,7 @@ class GameEngine {
 
         // Create AI civs
         const shuffled = [...AI_CIV_NAMES].sort(() => Math.random() - 0.5);
-        for (let i = 0; i < aiCount; i++) {
+        for (let i = 0; i < clampedAiCount; i++) {
             const ai = new Civilization(shuffled[i], false);
             this.applyGovernmentEffects(ai, 'despotism');
             // Difficulty bonuses for AI
@@ -259,9 +262,11 @@ class GameEngine {
     processTurn(civ) {
         if (!civ.alive) return;
 
-        // Collect resources
-        civ.gold += civ.goldRate;
-        civ.food += civ.foodRate;
+        // Collect resources (with Golden Age bonus if active)
+        const goldenAgeGoldBonus = civ.goldenAgeTurns > 0 ? 5 : 0;
+        const goldenAgeFoodBonus = civ.goldenAgeTurns > 0 ? 2 : 0;
+        civ.gold += civ.goldRate + goldenAgeGoldBonus;
+        civ.food += civ.foodRate + goldenAgeFoodBonus;
         civ.production += civ.productionRate;
         civ.science += civ.scienceRate;
 
@@ -276,12 +281,10 @@ class GameEngine {
             civ.warWeariness = Math.max(0, civ.warWeariness - 1);
         }
 
-        // Golden Age countdown
+        // Golden Age bonus applied during resource collection above, countdown here
         if (civ.goldenAgeTurns > 0) {
             civ.goldenAgeTurns--;
             if (civ.goldenAgeTurns === 0) {
-                civ.goldRate -= 5;
-                civ.foodRate -= 2;
                 if (civ.isPlayer) this.addEvent('game', `${civ.name}: The Golden Age has ended.`);
             }
         }
@@ -350,10 +353,11 @@ class GameEngine {
         let result;
         if (attackRoll > defendRoll) {
             const damage = Math.floor((attackRoll - defendRoll) / 2);
-            defender.military = Math.max(0, defender.military - damage);
+            this.applyMilitaryDamage(defender, damage);
             defender.population = Math.max(1, defender.population - Math.floor(damage / 3));
             defender.gold = Math.max(0, defender.gold - damage * 5);
-            attacker.military = Math.max(0, attacker.military - Math.floor(damage / 4));
+            // Attacker takes reduced losses
+            this.applyMilitaryDamage(attacker, Math.floor(damage / 4));
 
             // Check if defender is conquered
             if (defender.getTotalMilitary() <= 0 && defender.population <= 1) {
@@ -367,7 +371,7 @@ class GameEngine {
             }
         } else {
             const damage = Math.floor((defendRoll - attackRoll) / 3);
-            attacker.military = Math.max(0, attacker.military - damage);
+            this.applyMilitaryDamage(attacker, damage);
             result = { winner: defender.name, loser: attacker.name, conquered: false, damage };
             this.addEvent('war', `🛡️ ${defender.name} repelled an attack from ${attacker.name}!`);
         }
@@ -375,14 +379,42 @@ class GameEngine {
         return result;
     }
 
+    // Apply military damage by first reducing base military, then removing units
+    applyMilitaryDamage(civ, damage) {
+        let remaining = damage;
+
+        // First reduce base military
+        const baseDmg = Math.min(civ.military, remaining);
+        civ.military = Math.max(0, civ.military - baseDmg);
+        remaining -= baseDmg;
+
+        // Then remove weakest units until damage is absorbed
+        while (remaining > 0 && civ.units.length > 0) {
+            // Sort by power ascending, remove weakest first
+            civ.units.sort((a, b) => (MILITARY_UNITS[a]?.power || 0) - (MILITARY_UNITS[b]?.power || 0));
+            const unitId = civ.units[0];
+            const unit = MILITARY_UNITS[unitId];
+            if (unit) {
+                remaining -= unit.power;
+            }
+            civ.units.shift();
+        }
+    }
+
     launchNuke(attacker, defender) {
         if (!attacker.hasNukes || !attacker.alive || !defender.alive) return null;
 
         attacker.nukesUsed++;
+        // Remove one nuke from the attacker's units
+        const nukeIndex = attacker.units.indexOf('nuke');
+        if (nukeIndex !== -1) {
+            attacker.units.splice(nukeIndex, 1);
+        }
+
         const damage = 30 + Math.floor(Math.random() * 20);
 
         defender.population = Math.max(1, defender.population - Math.floor(damage / 3));
-        defender.military = Math.max(0, defender.military - damage);
+        this.applyMilitaryDamage(defender, damage);
         defender.production = Math.max(0, defender.production - Math.floor(damage / 2));
         defender.gold = Math.max(0, defender.gold - damage * 10);
 
@@ -534,7 +566,7 @@ class GameEngine {
         if (oldGov) {
             Object.entries(oldGov.effects).forEach(([key, val]) => {
                 if (key === 'militaryBonus') civ.military = Math.max(0, civ.military - val);
-                else if (civ[key] !== undefined) civ[key] -= val;
+                else if (civ[key] !== undefined) civ[key] = Math.max(0, civ[key] - val);
             });
         }
 
@@ -542,7 +574,7 @@ class GameEngine {
         civ.government = govId;
         Object.entries(gov.effects).forEach(([key, val]) => {
             if (key === 'militaryBonus') civ.military = Math.max(0, civ.military + val);
-            else if (civ[key] !== undefined) civ[key] += val;
+            else if (civ[key] !== undefined) civ[key] = Math.max(0, civ[key] + val);
         });
 
         this.addEvent('game', `${civ.name} adopted ${gov.name} as their government!`);
