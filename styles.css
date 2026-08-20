@@ -445,9 +445,11 @@ body {
 /* Game Over Screen */
 #gameover-screen {
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     text-align: center;
     background: linear-gradient(135deg, var(--bg-dark), var(--bg-medium));
+    padding: 3rem 1.5rem;
+    overflow-y: auto;
 }
 
 #gameover-screen h1 {
@@ -467,6 +469,72 @@ body {
     margin-bottom: 2rem;
     flex-wrap: wrap;
     justify-content: center;
+}
+
+/* Post-Game Analysis */
+#gameover-analysis {
+    max-width: 600px;
+    width: 100%;
+    margin: 0 auto 2rem;
+    text-align: left;
+}
+
+.analysis-header {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+    color: var(--text-primary);
+    text-align: center;
+}
+
+.analysis-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0;
+    list-style: none;
+}
+
+.analysis-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+    background: var(--bg-medium);
+    border-left: 3px solid var(--bg-light);
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.analysis-step.positive {
+    border-left-color: var(--success);
+}
+
+.analysis-step.negative {
+    border-left-color: var(--danger);
+}
+
+.analysis-step.tip {
+    border-left-color: var(--science);
+}
+
+.analysis-step.warning {
+    border-left-color: var(--warning);
+}
+
+.analysis-step .step-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+
+.analysis-step .step-text {
+    color: var(--text-secondary);
+}
+
+.analysis-step .step-text strong {
+    color: var(--text-primary);
 }
 
 .stat-box {

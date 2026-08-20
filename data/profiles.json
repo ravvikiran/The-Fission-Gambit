@@ -1,1 +1,30 @@
-{}
+{
+  "player_mt18776h_p9apl": {
+    "name": "Ravi",
+    "createdAt": "2026-08-20T07:55:36.857Z",
+    "lastSeen": "2026-08-20T07:57:19.399Z",
+    "totalSessions": 2,
+    "totalGamesPlayed": 1,
+    "totalWins": 0,
+    "totalLosses": 1,
+    "bestScore": 111,
+    "achievements": [
+      {
+        "id": "diplomat",
+        "name": "🤝 Diplomat",
+        "desc": "Win by diplomacy",
+        "unlockedAt": "2026-08-20T09:27:57.173Z"
+      }
+    ],
+    "history": [
+      {
+        "date": "2026-08-20T09:27:57.173Z",
+        "civName": "Roma",
+        "turns": 46,
+        "won": false,
+        "victoryType": "diplomatic",
+        "score": 111
+      }
+    ]
+  }
+}

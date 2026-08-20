@@ -422,5 +422,209 @@ class GameUI {
             <div class="stat-box"><div class="label">Military</div><div class="value">${this.game.player.getTotalMilitary()}</div></div>
             <div class="stat-box"><div class="label">Victory</div><div class="value">${victoryType}</div></div>
         `;
+
+        // Generate and display post-game analysis
+        const analysisContainer = document.getElementById('gameover-analysis');
+        const analysis = this.generatePostGameAnalysis(winner, victoryType, isPlayerWin);
+        analysisContainer.innerHTML = analysis;
+    }
+
+    generatePostGameAnalysis(winner, victoryType, isPlayerWin) {
+        const p = this.game.player;
+        const steps = [];
+
+        if (isPlayerWin) {
+            steps.push(...this.analyzeVictory(p, victoryType));
+        } else {
+            steps.push(...this.analyzeDefeat(p, winner, victoryType));
+        }
+
+        // Common observations for both outcomes
+        steps.push(...this.analyzeGeneralPerformance(p, isPlayerWin));
+
+        const headerText = isPlayerWin ? '📋 What Won You the Game' : '📋 What Could Have Saved You';
+
+        return `
+            <div class="analysis-header">${headerText}</div>
+            <ol class="analysis-timeline">
+                ${steps.map(s => `
+                    <li class="analysis-step ${s.type}">
+                        <span class="step-icon">${s.icon}</span>
+                        <span class="step-text">${s.text}</span>
+                    </li>
+                `).join('')}
+            </ol>
+        `;
+    }
+
+    analyzeVictory(player, victoryType) {
+        const steps = [];
+
+        switch (victoryType) {
+            case 'science':
+                steps.push({ type: 'positive', icon: '🔬', text: '<strong>Science focus paid off.</strong> You prioritized research and reached Space Travel before anyone else.' });
+                if (player.scienceRate >= 15) {
+                    steps.push({ type: 'positive', icon: '📚', text: `<strong>Strong science infrastructure.</strong> Your ${player.scienceRate}/turn science rate kept you ahead of the tech curve.` });
+                }
+                if (player.buildings.includes('university') || player.buildings.includes('lab')) {
+                    steps.push({ type: 'positive', icon: '🏗️', text: '<strong>Key buildings.</strong> Universities and Research Labs accelerated your research significantly.' });
+                }
+                if (player.wonders.includes('greatLibrary') || player.wonders.includes('oxfordUniversity')) {
+                    steps.push({ type: 'positive', icon: '🏛️', text: '<strong>Wonder advantage.</strong> Science wonders gave you a massive research boost over rivals.' });
+                }
+                break;
+
+            case 'economic':
+                steps.push({ type: 'positive', icon: '💰', text: `<strong>Economic dominance.</strong> You accumulated ${Math.floor(player.gold)} gold, reaching the 5000 threshold.` });
+                if (player.goldRate >= 15) {
+                    steps.push({ type: 'positive', icon: '📈', text: `<strong>High income.</strong> Your ${player.goldRate}/turn gold rate sustained rapid wealth accumulation.` });
+                }
+                if (player.buildings.includes('bank') || player.buildings.includes('stockExchange')) {
+                    steps.push({ type: 'positive', icon: '🏦', text: '<strong>Financial buildings.</strong> Banks and Stock Exchanges were key to your gold engine.' });
+                }
+                if (player.wonders.includes('bigBen')) {
+                    steps.push({ type: 'positive', icon: '🏛️', text: '<strong>Big Ben wonder.</strong> The +20 gold/turn from Big Ben was a game-changer.' });
+                }
+                break;
+
+            case 'domination':
+                steps.push({ type: 'positive', icon: '⚔️', text: '<strong>Military supremacy.</strong> You eliminated all rival civilizations through force.' });
+                if (player.nukesUsed > 0) {
+                    steps.push({ type: 'positive', icon: '☢️', text: `<strong>Nuclear deterrent.</strong> You used ${player.nukesUsed} nuclear strike(s) to decisively end conflicts.` });
+                }
+                const totalUnits = player.units.length;
+                if (totalUnits >= 5) {
+                    steps.push({ type: 'positive', icon: '🗡️', text: `<strong>Large army.</strong> Maintaining ${totalUnits} units gave you overwhelming force.` });
+                }
+                if (player.government === 'monarchy' || player.government === 'theocracy') {
+                    steps.push({ type: 'positive', icon: '🏛️', text: `<strong>Military government.</strong> ${GOVERNMENTS[player.government].name} provided crucial military bonuses.` });
+                }
+                break;
+
+            case 'diplomatic':
+                steps.push({ type: 'positive', icon: '🤝', text: '<strong>Diplomatic mastery.</strong> You allied with every surviving civilization through patience and generosity.' });
+                const alliedCount = Object.values(player.relations).filter(r => r.status === 'allied').length;
+                steps.push({ type: 'positive', icon: '🕊️', text: `<strong>Alliance network.</strong> You maintained ${alliedCount} active alliance(s).` });
+                if (player.gold > 500) {
+                    steps.push({ type: 'positive', icon: '💰', text: '<strong>Gift diplomacy.</strong> Your gold reserves enabled generous gifting to improve relations.' });
+                }
+                break;
+        }
+
+        // Speed bonus
+        if (this.game.turn <= 50) {
+            steps.push({ type: 'positive', icon: '⚡', text: `<strong>Speed victory!</strong> Winning in ${this.game.turn} turns is an impressive feat.` });
+        }
+
+        return steps;
+    }
+
+    analyzeDefeat(player, winner, victoryType) {
+        const steps = [];
+
+        // What the winner did right
+        steps.push({ type: 'negative', icon: '💀', text: `<strong>${this.escapeHTML(winner.name)} won by ${victoryType}.</strong> They outpaced you in the key area needed for this victory.` });
+
+        // Analyze what the player lacked based on how they lost
+        switch (victoryType) {
+            case 'science':
+                steps.push({ type: 'tip', icon: '💡', text: '<strong>Tip: Race the tech tree.</strong> When a rival is ahead in tech, prioritize science buildings (Libraries, Universities, Labs) and techs that boost science rate.' });
+                if (player.scienceRate < 10) {
+                    steps.push({ type: 'warning', icon: '⚠️', text: `<strong>Low science output.</strong> Your ${player.scienceRate}/turn wasn't enough. Build more science infrastructure early.` });
+                }
+                if (!player.techs.includes('education')) {
+                    steps.push({ type: 'tip', icon: '💡', text: '<strong>Tip:</strong> Research Education early — it unlocks Universities which are crucial for mid-game science.' });
+                }
+                break;
+
+            case 'economic':
+                steps.push({ type: 'tip', icon: '💡', text: '<strong>Tip: Disrupt their economy.</strong> When a rival is hoarding gold, declare war or use espionage to sabotage their production and drain their resources.' });
+                if (player.goldRate < winner.goldRate) {
+                    steps.push({ type: 'warning', icon: '⚠️', text: `<strong>Income gap.</strong> Your gold rate (${player.goldRate}/t) couldn't compete with ${this.escapeHTML(winner.name)}'s economy. Markets, Banks, and trade help.` });
+                }
+                break;
+
+            case 'domination':
+                steps.push({ type: 'tip', icon: '💡', text: '<strong>Tip: Build defenses early.</strong> When facing an aggressive opponent, invest in military units before you need them — not after war is declared.' });
+                if (player.getTotalMilitary() < 15) {
+                    steps.push({ type: 'warning', icon: '⚠️', text: `<strong>Weak military.</strong> Your military power (${player.getTotalMilitary()}) was too low to survive. Train units regularly.` });
+                }
+                if (!player.techs.includes('gunpowder')) {
+                    steps.push({ type: 'tip', icon: '💡', text: '<strong>Tip:</strong> Research Gunpowder — it provides +5 military power and unlocks stronger units.' });
+                }
+                if (player.wonders.length === 0 || !player.wonders.includes('greatWall')) {
+                    steps.push({ type: 'tip', icon: '💡', text: '<strong>Tip:</strong> Build the Great Wall wonder for +15 defense bonus in all combat.' });
+                }
+                break;
+
+            case 'diplomatic':
+                steps.push({ type: 'tip', icon: '💡', text: '<strong>Tip: Break their alliances.</strong> Declare war on a civ allied with the leader to break diplomatic progress. Espionage can also damage relations between civs.' });
+                const hostileRelations = Object.values(player.relations).filter(r => r.status === 'hostile' || r.status === 'war').length;
+                if (hostileRelations > 0) {
+                    steps.push({ type: 'warning', icon: '⚠️', text: `<strong>Too many enemies.</strong> You had ${hostileRelations} hostile/war relation(s). Maintain peaceful relations or at least neutrality with most civs.` });
+                }
+                break;
+        }
+
+        // General defeat observations
+        if (!player.alive) {
+            steps.push({ type: 'negative', icon: '☠️', text: '<strong>Your civilization was conquered.</strong> You were eliminated before the game ended. Survival should always be the first priority.' });
+        }
+
+        return steps;
+    }
+
+    analyzeGeneralPerformance(player, isPlayerWin) {
+        const steps = [];
+
+        // Economy analysis
+        if (player.goldRate <= 0) {
+            steps.push({ type: 'warning', icon: '📉', text: '<strong>Negative gold income.</strong> Your economy was in deficit. Build Markets and Banks, or switch to a government with gold bonuses (Republic, Democracy).' });
+        }
+
+        // War weariness
+        if (player.warWeariness > 5) {
+            steps.push({ type: 'warning', icon: '😩', text: `<strong>High war weariness (${Math.floor(player.warWeariness)}).</strong> Extended wars drain gold. End conflicts quickly or avoid prolonged multi-front wars.` });
+        }
+
+        // Tech tree progress
+        const totalTechs = Object.keys(TECHS).length;
+        const techPct = Math.round((player.techs.length / totalTechs) * 100);
+        if (techPct < 30 && this.game.turn > 30) {
+            steps.push({ type: isPlayerWin ? 'tip' : 'warning', icon: '🔬', text: `<strong>Low tech coverage (${techPct}%).</strong> You researched ${player.techs.length}/${totalTechs} technologies. More research opens stronger buildings and units.` });
+        } else if (techPct >= 70) {
+            steps.push({ type: 'positive', icon: '🎓', text: `<strong>Tech leader (${techPct}%).</strong> You researched ${player.techs.length}/${totalTechs} technologies — a strong knowledge base.` });
+        }
+
+        // Buildings
+        if (player.buildings.length < 3 && this.game.turn > 20) {
+            steps.push({ type: isPlayerWin ? 'tip' : 'warning', icon: '🏗️', text: `<strong>Few buildings (${player.buildings.length}).</strong> Buildings compound over time — build early and often for resource advantages.` });
+        }
+
+        // Wonders
+        if (player.wonders.length > 0 && isPlayerWin) {
+            steps.push({ type: 'positive', icon: '🏛️', text: `<strong>Wonder builder.</strong> You completed ${player.wonders.length} wonder(s): ${player.wonders.map(w => WONDERS[w]?.name || w).join(', ')}.` });
+        } else if (player.wonders.length === 0 && !isPlayerWin) {
+            steps.push({ type: 'tip', icon: '💡', text: '<strong>Tip: Build wonders.</strong> Wonders give permanent powerful bonuses. Prioritize ones that match your strategy.' });
+        }
+
+        // Nukes used (regardless of outcome)
+        if (player.nukesUsed > 2) {
+            steps.push({ type: 'warning', icon: '☢️', text: `<strong>Heavy nuclear use (${player.nukesUsed} strikes).</strong> Nukes make ALL other civs hostile. Use sparingly or be prepared for total war.` });
+        }
+
+        // Population
+        if (player.population >= 25) {
+            steps.push({ type: 'positive', icon: '👥', text: `<strong>Population powerhouse (${player.population}).</strong> High population supports more food consumption but reflects strong growth.` });
+        } else if (player.population < 8 && this.game.turn > 25) {
+            steps.push({ type: isPlayerWin ? 'tip' : 'warning', icon: '👥', text: `<strong>Low population (${player.population}).</strong> Build Farms and ensure food surplus to grow. Population drives all other production.` });
+        }
+
+        // Government analysis
+        if (player.government === 'despotism' && player.getEra() >= 2) {
+            steps.push({ type: 'tip', icon: '🏛️', text: '<strong>Tip: Upgrade government.</strong> You stayed on Despotism too long. Republic, Monarchy, or Democracy provide much better bonuses.' });
+        }
+
+        return steps;
     }
 }
