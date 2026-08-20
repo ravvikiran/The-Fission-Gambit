@@ -129,50 +129,72 @@ class GameUI {
         const p = this.game.player;
         const visual = document.getElementById('civ-visual');
 
-        // Build visual clusters based on actual game state
         const sections = [];
 
-        // Population (people icons)
-        const popCount = Math.min(p.population, 20); // cap visual at 20 icons
-        const popIcons = '👤'.repeat(Math.min(popCount, 10)) + (popCount > 10 ? `<span class="viz-count">+${popCount - 10}</span>` : '');
-        sections.push(`<div class="viz-group"><span class="viz-label">Pop</span>${popIcons}</div>`);
+        // Era indicator
+        const eraIcons = ['🏺', '🏛️', '⚔️', '🎨', '🏭', '💡', '☢️'];
+        const eraIcon = eraIcons[p.getEra()] || '🏺';
+        sections.push(`<div class="viz-group"><span class="viz-label">Era</span><span class="viz-icon">${eraIcon}</span></div>`);
 
         sections.push('<span class="viz-separator"></span>');
 
-        // Agriculture/Farms
-        const farmCount = p.buildings.filter(b => b === 'farm').length;
+        // Population (people icons, scaled)
+        const popCount = p.population;
+        const popDisplay = popCount <= 8
+            ? '👤'.repeat(popCount)
+            : '👤'.repeat(5) + `<span class="viz-count">+${popCount - 5}</span>`;
+        sections.push(`<div class="viz-group"><span class="viz-label">Pop</span>${popDisplay}</div>`);
+
+        sections.push('<span class="viz-separator"></span>');
+
+        // Agriculture/Food buildings
         const foodBuildings = p.buildings.filter(b => BUILDINGS[b]?.effect.foodRate).length;
-        if (foodBuildings > 0 || p.foodRate > 3) {
-            const farmIcons = '🌾'.repeat(Math.min(foodBuildings, 5)) || '🌾';
-            sections.push(`<div class="viz-group"><span class="viz-label">Farms</span>${farmIcons}</div>`);
+        if (foodBuildings > 0) {
+            sections.push(`<div class="viz-group"><span class="viz-label">Farms</span>${'🌾'.repeat(Math.min(foodBuildings, 4))}</div>`);
         }
 
-        // Mining/Production
+        // Mining/Production buildings
         const prodBuildings = p.buildings.filter(b => BUILDINGS[b]?.effect.productionRate).length;
-        if (prodBuildings > 0 || p.productionRate > 3) {
-            const mineIcons = '⛏️'.repeat(Math.min(prodBuildings, 5)) || '⛏️';
-            sections.push(`<div class="viz-group"><span class="viz-label">Mines</span>${mineIcons}</div>`);
+        if (prodBuildings > 0) {
+            sections.push(`<div class="viz-group"><span class="viz-label">Industry</span>${'⛏️'.repeat(Math.min(prodBuildings, 4))}</div>`);
         }
 
-        // Commerce/Gold
+        // Commerce/Gold buildings
         const goldBuildings = p.buildings.filter(b => BUILDINGS[b]?.effect.goldRate).length;
         if (goldBuildings > 0) {
-            const goldIcons = '🏪'.repeat(Math.min(goldBuildings, 5));
-            sections.push(`<div class="viz-group"><span class="viz-label">Trade</span>${goldIcons}</div>`);
+            sections.push(`<div class="viz-group"><span class="viz-label">Trade</span>${'🏪'.repeat(Math.min(goldBuildings, 4))}</div>`);
         }
 
-        // Science
+        // Science buildings
         const sciBuildings = p.buildings.filter(b => BUILDINGS[b]?.effect.scienceRate).length;
         if (sciBuildings > 0) {
-            const sciIcons = '📖'.repeat(Math.min(sciBuildings, 5));
-            sections.push(`<div class="viz-group"><span class="viz-label">Science</span>${sciIcons}</div>`);
+            sections.push(`<div class="viz-group"><span class="viz-label">Labs</span>${'🔬'.repeat(Math.min(sciBuildings, 4))}</div>`);
         }
 
-        sections.push('<span class="viz-separator"></span>');
+        // Show separator only if we had buildings
+        if (foodBuildings + prodBuildings + goldBuildings + sciBuildings > 0) {
+            sections.push('<span class="viz-separator"></span>');
+        }
+
+        // Tech progress (show icons for key techs unlocked)
+        const techIcons = [];
+        if (p.techs.includes('agriculture')) techIcons.push('🌱');
+        if (p.techs.includes('mining')) techIcons.push('⛰️');
+        if (p.techs.includes('writing')) techIcons.push('📜');
+        if (p.techs.includes('gunpowder')) techIcons.push('💥');
+        if (p.techs.includes('industrialization')) techIcons.push('🏭');
+        if (p.techs.includes('electricity')) techIcons.push('⚡');
+        if (p.techs.includes('computers')) techIcons.push('💻');
+        if (p.techs.includes('nuclearFission')) techIcons.push('☢️');
+        if (p.techs.includes('spaceTravel')) techIcons.push('🚀');
+
+        if (techIcons.length > 0) {
+            sections.push(`<div class="viz-group"><span class="viz-label">Tech</span>${techIcons.join('')}</div>`);
+            sections.push('<span class="viz-separator"></span>');
+        }
 
         // Military units visual
         if (p.units.length > 0) {
-            const unitVisuals = [];
             const unitCounts = {};
             p.units.forEach(u => { unitCounts[u] = (unitCounts[u] || 0) + 1; });
 
@@ -186,6 +208,7 @@ class GameUI {
                 nuke: '☢️',
             };
 
+            const unitVisuals = [];
             for (const [unitId, count] of Object.entries(unitCounts)) {
                 const icon = unitIcons[unitId] || '⚔️';
                 if (count <= 3) {
@@ -197,28 +220,42 @@ class GameUI {
 
             sections.push(`<div class="viz-group"><span class="viz-label">Army</span>${unitVisuals.join(' ')}</div>`);
         } else {
-            sections.push(`<div class="viz-group"><span class="viz-label">Army</span><span style="font-size:0.75rem;color:var(--text-secondary);">None</span></div>`);
+            sections.push(`<div class="viz-group"><span class="viz-label">Army</span><span style="font-size:0.7rem;color:var(--text-secondary);">—</span></div>`);
         }
 
-        // Wonders (trophy icons)
+        // Wonders (unique golden icons)
         if (p.wonders.length > 0) {
             sections.push('<span class="viz-separator"></span>');
-            const wonderIcons = p.wonders.map(w => '🏛️').join('');
+            const wonderIcons = p.wonders.map(() => '🏛️').join('');
             sections.push(`<div class="viz-group"><span class="viz-label">Wonders</span>${wonderIcons}</div>`);
         }
 
         // Government icon
+        sections.push('<span class="viz-separator"></span>');
         const govIcons = {
             despotism: '👑',
             republic: '🏛️',
             monarchy: '♔',
             democracy: '🗳️',
-            communism: '☭',
+            communism: '⚙️',
             theocracy: '⛪',
         };
         const govIcon = govIcons[p.government] || '👑';
-        sections.push('<span class="viz-separator"></span>');
-        sections.push(`<div class="viz-group"><span class="viz-label">Gov</span><span class="viz-icon">${govIcon}</span></div>`);
+        const govName = GOVERNMENTS[p.government]?.name || 'Despotism';
+        sections.push(`<div class="viz-group"><span class="viz-label">Gov</span><span class="viz-icon">${govIcon}</span><span class="viz-count">${govName}</span></div>`);
+
+        // Golden Age indicator
+        if (p.goldenAgeTurns > 0) {
+            sections.push('<span class="viz-separator"></span>');
+            sections.push(`<div class="viz-group"><span class="viz-icon" style="animation:alertPulse 1s infinite;">✨</span><span class="viz-count">Golden Age (${p.goldenAgeTurns}t)</span></div>`);
+        }
+
+        // Nuke ready indicator
+        if (p.hasNukes && p.units.includes('nuke')) {
+            const nukeCount = p.units.filter(u => u === 'nuke').length;
+            sections.push('<span class="viz-separator"></span>');
+            sections.push(`<div class="viz-group"><span class="viz-icon" style="color:#ff00ff;">☢️</span><span class="viz-count" style="color:#ff00ff;">${nukeCount} ready</span></div>`);
+        }
 
         visual.innerHTML = sections.join('');
     }
@@ -231,6 +268,7 @@ class GameUI {
         document.getElementById('res-science').textContent = Math.floor(p.science);
         document.getElementById('res-military').textContent = p.getTotalMilitary();
         document.getElementById('res-population').textContent = p.population;
+        document.getElementById('res-techs').textContent = p.techs.length;
 
         const goldRate = document.getElementById('res-gold-rate');
         const goldenAgeGoldBonus = p.goldenAgeTurns > 0 ? 5 : 0;
@@ -526,9 +564,27 @@ class GameUI {
             const safeName = this.escapeHTML(civ.name);
             const jsName = civ.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
+            // Get diplomacy log for this civ
+            const civLog = this.game.diplomacyLog[civ.name] || [];
+            const logHTML = civLog.length > 0 ? `
+                <div class="civ-log">
+                    ${civLog.slice(0, 5).map(entry => {
+                        const logIcons = {
+                            gift_sent: '🎁', gift_received: '🎁', alliance: '🤝',
+                            war: '⚔️', hostile: '😠', battle_won: '🏆',
+                            battle_lost: '💔', conquered: '💀', nuked: '☢️',
+                            espionage: '🕵️'
+                        };
+                        const icon = logIcons[entry.type] || '📝';
+                        return `<div class="civ-log-entry"><span class="civ-log-turn">T${entry.turn}</span> ${icon} ${this.escapeHTML(entry.message)}</div>`;
+                    }).join('')}
+                </div>
+            ` : '';
+
             if (!alive) {
                 return `<div class="civ-card" style="opacity:0.5;">
                     <h4>${safeName} <span class="relation hostile">💀 Eliminated</span></h4>
+                    ${logHTML}
                 </div>`;
             }
 
@@ -563,6 +619,7 @@ class GameUI {
                     <span>Strategy: ${this.escapeHTML(civ.strategy)}</span>
                 </div>
                 <div class="diplomacy-actions">${actions.join('')}</div>
+                ${logHTML}
             </div>`;
         }).join('');
 

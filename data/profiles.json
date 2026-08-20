@@ -2,11 +2,11 @@
   "player_mt18776h_p9apl": {
     "name": "Ravi",
     "createdAt": "2026-08-20T07:55:36.857Z",
-    "lastSeen": "2026-08-20T07:57:19.399Z",
-    "totalSessions": 2,
-    "totalGamesPlayed": 1,
+    "lastSeen": "2026-08-20T09:54:26.396Z",
+    "totalSessions": 3,
+    "totalGamesPlayed": 2,
     "totalWins": 0,
-    "totalLosses": 1,
+    "totalLosses": 2,
     "bestScore": 111,
     "achievements": [
       {
@@ -17,6 +17,14 @@
       }
     ],
     "history": [
+      {
+        "date": "2026-08-20T10:06:05.479Z",
+        "civName": "Roma",
+        "turns": 33,
+        "won": false,
+        "victoryType": "diplomatic",
+        "score": 111
+      },
       {
         "date": "2026-08-20T09:27:57.173Z",
         "civName": "Roma",

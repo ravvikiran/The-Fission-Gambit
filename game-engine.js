@@ -194,6 +194,7 @@ class GameEngine {
         this.civilizations = [];
         this.player = null;
         this.events = [];
+        this.diplomacyLog = {}; // civName -> [{turn, type, message}]
         this.gameOver = false;
         this.winner = null;
         this.victoryType = null;
@@ -204,6 +205,7 @@ class GameEngine {
         this.difficulty = difficulty;
         this.turn = 1;
         this.events = [];
+        this.diplomacyLog = {};
         this.gameOver = false;
         this.winner = null;
         this.civilizations = [];
@@ -257,6 +259,17 @@ class GameEngine {
     addEvent(type, message) {
         this.events.unshift({ turn: this.turn, type, message });
         if (this.events.length > 50) this.events.pop();
+    }
+
+    addDiplomacyLog(civName, type, message) {
+        if (!this.diplomacyLog[civName]) {
+            this.diplomacyLog[civName] = [];
+        }
+        this.diplomacyLog[civName].unshift({ turn: this.turn, type, message });
+        // Keep last 10 entries per civ
+        if (this.diplomacyLog[civName].length > 10) {
+            this.diplomacyLog[civName].pop();
+        }
     }
 
     processTurn(civ) {
@@ -365,15 +378,21 @@ class GameEngine {
                 attacker.gold += Math.floor(defender.gold / 2);
                 result = { winner: attacker.name, loser: defender.name, conquered: true };
                 this.addEvent('war', `💀 ${defender.name} has been CONQUERED by ${attacker.name}!`);
+                this.addDiplomacyLog(defender.name, 'conquered', `${defender.name} was conquered`);
+                this.addDiplomacyLog(attacker.name, 'conquered', `Conquered ${defender.name}`);
             } else {
                 result = { winner: attacker.name, loser: defender.name, conquered: false, damage };
                 this.addEvent('war', `⚔️ ${attacker.name} won a battle against ${defender.name}!`);
+                this.addDiplomacyLog(defender.name, 'battle_lost', `Lost battle (-${damage} damage)`);
+                this.addDiplomacyLog(attacker.name, 'battle_won', `Won battle against ${defender.name}`);
             }
         } else {
             const damage = Math.floor((defendRoll - attackRoll) / 3);
             this.applyMilitaryDamage(attacker, damage);
             result = { winner: defender.name, loser: attacker.name, conquered: false, damage };
             this.addEvent('war', `🛡️ ${defender.name} repelled an attack from ${attacker.name}!`);
+            this.addDiplomacyLog(attacker.name, 'battle_lost', `Attack repelled by ${defender.name}`);
+            this.addDiplomacyLog(defender.name, 'battle_won', `Repelled attack from ${attacker.name}`);
         }
 
         return result;
@@ -431,11 +450,14 @@ class GameEngine {
         }
 
         this.addEvent('nuke', `☢️ ${attacker.name} launched a NUCLEAR STRIKE on ${defender.name}! Devastating damage!`);
+        this.addDiplomacyLog(defender.name, 'nuked', `Nuclear strike received from ${attacker.name} (-${damage} damage)`);
+        this.addDiplomacyLog(attacker.name, 'nuked', `Launched nuclear strike on ${defender.name}`);
 
         // Check if defender conquered
         if (defender.getTotalMilitary() <= 0 && defender.population <= 1) {
             defender.alive = false;
             this.addEvent('nuke', `💀 ${defender.name} was destroyed by nuclear annihilation!`);
+            this.addDiplomacyLog(defender.name, 'conquered', `${defender.name} destroyed by nuclear annihilation`);
         }
 
         return { damage, target: defender.name };
@@ -456,6 +478,15 @@ class GameEngine {
             else if (status === 'hostile') civ2.relations[civ1.name].value = 20;
             else if (status === 'war') civ2.relations[civ1.name].value = 0;
         }
+
+        // Log status changes
+        if (status === 'war') {
+            this.addDiplomacyLog(civ2.name, 'war', `War declared between ${civ1.name} and ${civ2.name}`);
+            this.addDiplomacyLog(civ1.name, 'war', `War declared between ${civ1.name} and ${civ2.name}`);
+        } else if (status === 'hostile') {
+            this.addDiplomacyLog(civ2.name, 'hostile', `Relations turned hostile with ${civ2.name}`);
+            this.addDiplomacyLog(civ1.name, 'hostile', `Relations turned hostile with ${civ1.name}`);
+        }
     }
 
     proposeTrade(from, to, goldAmount) {
@@ -471,6 +502,8 @@ class GameEngine {
             from.relations[to.name].value = Math.min(100, from.relations[to.name].value + 5);
         }
         this.addEvent('peace', `${from.name} sent ${goldAmount} gold to ${to.name} as a gift.`);
+        this.addDiplomacyLog(to.name, 'gift_sent', `Sent ${goldAmount} gold as gift`);
+        this.addDiplomacyLog(from.name, 'gift_received', `Received ${goldAmount} gold as gift`);
         return true;
     }
 
@@ -479,6 +512,8 @@ class GameEngine {
         if (!relation || relation.value < 60) return false;
         this.setRelation(from, to, 'allied');
         this.addEvent('peace', `🤝 ${from.name} and ${to.name} formed an alliance!`);
+        this.addDiplomacyLog(to.name, 'alliance', `Alliance formed with ${to.name}`);
+        this.addDiplomacyLog(from.name, 'alliance', `Alliance formed with ${from.name}`);
         return true;
     }
 
@@ -629,6 +664,7 @@ class GameEngine {
                     if (tech?.scienceBonus) spy.scienceRate += tech.scienceBonus;
                     if (tech?.enablesNukes) spy.hasNukes = true;
                     this.addEvent('science', `🕵️ ${spy.name} stole ${TECHS[stolen]?.name} from ${target.name}!`);
+                    this.addDiplomacyLog(target.name, 'espionage', `Stole tech: ${TECHS[stolen]?.name}`);
                     // Getting caught damages relations
                     if (Math.random() < 0.5 && target.relations[spy.name]) {
                         target.relations[spy.name].value = Math.max(0, target.relations[spy.name].value - 20);
@@ -647,6 +683,7 @@ class GameEngine {
                 target.production = Math.max(0, target.production - damage);
                 target.buildProgress = Math.max(0, target.buildProgress - 5);
                 this.addEvent('war', `🕵️ ${spy.name} sabotaged ${target.name}'s infrastructure! (-${damage} production)`);
+                this.addDiplomacyLog(target.name, 'espionage', `Sabotaged infrastructure (-${damage} production)`);
                 if (Math.random() < 0.4 && target.relations[spy.name]) {
                     target.relations[spy.name].value = Math.max(0, target.relations[spy.name].value - 25);
                     if (target.relations[spy.name].value < 20) target.relations[spy.name].status = 'hostile';

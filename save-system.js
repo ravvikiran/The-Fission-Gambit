@@ -145,6 +145,7 @@ class SaveSystem {
                 defenseBonus: civ.defenseBonus,
             })),
             events: gameEngine.events.slice(0, 20),
+            diplomacyLog: gameEngine.diplomacyLog || {},
         };
 
         try {
@@ -198,6 +199,7 @@ class SaveSystem {
         gameEngine.turn = saveData.turn;
         gameEngine.difficulty = saveData.difficulty;
         gameEngine.events = saveData.events || [];
+        gameEngine.diplomacyLog = saveData.diplomacyLog || {};
         gameEngine.civilizations = [];
         gameEngine.gameOver = false;
         gameEngine.winner = null;
